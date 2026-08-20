@@ -1,0 +1,24 @@
+{
+  "name": "campus-404-treasure-hunt",
+  "version": "1.0.0",
+  "private": true,
+  "description": "CAMPUS 404 — QR Code Treasure Hunt. A full-stack MERN app for college Tech & Non-Tech Day.",
+  "scripts": {
+    "install:all": "npm install && npm --prefix backend install && npm --prefix frontend install",
+    "dev": "concurrently -n backend,frontend -c blue,green \"npm --prefix backend run dev\" \"npm --prefix frontend run dev\"",
+    "dev:backend": "npm --prefix backend run dev",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "seed": "npm --prefix backend run seed",
+    "generate:qrs": "npm --prefix backend run generate:qrs",
+    "print:qrs": "npm --prefix backend run print:qrs",
+    "test": "npm --prefix backend test",
+    "build": "npm --prefix frontend run build",
+    "start": "npm --prefix backend start"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

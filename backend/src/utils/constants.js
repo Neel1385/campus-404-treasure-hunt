@@ -1,0 +1,55 @@
+// Business constants shared across the app.
+
+module.exports = {
+  EVENT_STATUS: {
+    NOT_STARTED: "NOT_STARTED",
+    ACTIVE: "ACTIVE",
+    PAUSED: "PAUSED",
+    ENDED: "ENDED",
+  },
+
+  TEAM_STATUS: {
+    ACTIVE: "active",
+    COMPLETED: "completed",
+    DISABLED: "disabled",
+  },
+
+  QR_TYPE: {
+    NORMAL: "NORMAL",
+    BONUS: "BONUS",
+    HINT: "HINT",
+    TRAP: "TRAP",
+    CHECKPOINT: "CHECKPOINT",
+    ROAD_PONEGLYPH: "ROAD_PONEGLYPH",
+  },
+
+  ANSWER_TYPE: {
+    TEXT: "TEXT",
+    NUMBER: "NUMBER",
+    MULTIPLE_CHOICE: "MULTIPLE_CHOICE",
+    TRUE_FALSE: "TRUE_FALSE",
+    CHALLENGE: "CHALLENGE",
+  },
+
+  DIFFICULTY: {
+    EASY: "EASY",
+    MEDIUM: "MEDIUM",
+    HARD: "HARD",
+    FINAL: "FINAL",
+  },
+
+  SCORE_TRANSACTION_TYPE: {
+    CORRECT_QR: "CORRECT_QR",
+    CLUE_COMPLETED: "CLUE_COMPLETED",
+    SPEED_BONUS: "SPEED_BONUS",
+    WRONG_QR: "WRONG_QR",
+    WRONG_ANSWER: "WRONG_ANSWER",
+    HINT_PENALTY: "HINT_PENALTY",
+    BONUS: "BONUS",
+    FINAL_CHALLENGE: "FINAL_CHALLENGE",
+    ADMIN_ADJUSTMENT: "ADMIN_ADJUSTMENT",
+    TRAP: "TRAP",
+    CHECKPOINT: "CHECKPOINT",
+    ROAD_PONEGLYPH: "ROAD_PONEGLYPH",
+  },
+};

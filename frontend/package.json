@@ -1,0 +1,26 @@
+{
+  "name": "campus-404-frontend",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "CAMPUS 404 - QR Treasure Hunt player + admin web app",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "html5-qrcode": "^2.3.8",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-router-dom": "^6.26.2",
+    "socket.io-client": "^4.8.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "vite": "^5.4.6"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
