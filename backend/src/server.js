@@ -21,7 +21,18 @@ const eventRoutes = require("./routes/eventRoutes");
 const app = express();
 
 app.use(helmet());
-app.use(cors({ origin: clientOrigins }));
+app.use(cors({
+  origin: (origin, callback) => {
+    if (!origin || clientOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(null, true);
+    }
+  },
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+}));
 app.use(express.json({ limit: "1mb" }));
 
 // Health check (used by Render / uptime monitors).
@@ -44,7 +55,12 @@ app.use(errorHandler);
 
 // Socket.IO for live leaderboard updates (optional; the app works without it).
 const server = http.createServer(app);
-const io = new Server(server, { cors: { origin: clientOrigins } });
+const io = new Server(server, {
+  cors: {
+    origin: (origin, callback) => callback(null, true),
+    credentials: true,
+  },
+});
 
 io.on("connection", (socket) => {
   socket.on("leaderboard:subscribe", () => socket.join("leaderboard"));

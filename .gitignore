@@ -28,3 +28,6 @@ coverage/
 
 # Backup of an earlier conflicting build attempt (kept for reference only)
 _backup_previous_build/
+
+# Nested git clone (accidental)
+campus-404-treasure-hunt/
