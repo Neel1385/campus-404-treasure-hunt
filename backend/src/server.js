@@ -20,18 +20,15 @@ const eventRoutes = require("./routes/eventRoutes");
 
 const app = express();
 
-app.use(helmet());
+app.use(helmet({
+  crossOriginResourcePolicy: false,
+  crossOriginEmbedderPolicy: false,
+}));
 app.use(cors({
-  origin: (origin, callback) => {
-    if (!origin || clientOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(null, true);
-    }
-  },
-  credentials: true,
-  methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  origin: "*",
+  methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
+  preflightContinue: false,
+  optionsSuccessStatus: 204,
 }));
 app.use(express.json({ limit: "1mb" }));
 
@@ -55,12 +52,7 @@ app.use(errorHandler);
 
 // Socket.IO for live leaderboard updates (optional; the app works without it).
 const server = http.createServer(app);
-const io = new Server(server, {
-  cors: {
-    origin: (origin, callback) => callback(null, true),
-    credentials: true,
-  },
-});
+const io = new Server(server, { cors: { origin: "*" } });
 
 io.on("connection", (socket) => {
   socket.on("leaderboard:subscribe", () => socket.join("leaderboard"));
