@@ -7,7 +7,6 @@ solve clues in order, and race the clock for points on a live leaderboard.
 
 - `backend/` — REST API + admin panel endpoints (Express/Mongoose)
 - `frontend/` — player + organizer web app (React/Vite)
-
 ---
 
 ## Architecture

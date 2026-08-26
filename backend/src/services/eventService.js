@@ -28,6 +28,9 @@ async function getPublicEvent() {
     duration: event.duration,
     remainingMs: event.remainingMs(),
     leaderboardVisible: event.settings.leaderboardVisible,
+    islandNames: event.settings.islandNames instanceof Map
+      ? Object.fromEntries(event.settings.islandNames)
+      : event.settings.islandNames || {},
   };
 }
 
@@ -164,7 +167,7 @@ async function updateEventSettings(admin, patch) {
     "checkpointQREnabled", "allowNegativeScore", "leaderboardVisible", "pointsPerScan",
     "correctQRPoints", "clueCompletionPoints", "speedBonusEnabled", "speedBonusMax",
     "speedBonusT1", "speedBonusP1", "speedBonusT2", "speedBonusP2",
-    "speedBonusT3", "speedBonusP3", "finalChallengePoints",
+    "speedBonusT3", "speedBonusP3", "finalChallengePoints", "islandNames",
   ];
 
   for (const key of allowed) {
@@ -187,6 +190,12 @@ async function updateEventSettings(admin, patch) {
       event[key] = patch[key] ? new Date(patch[key]) : undefined;
     } else if (key === "name" || key === "description") {
       event[key] = String(patch[key]);
+    } else if (key === "islandNames") {
+      if (patch.islandNames && typeof patch.islandNames === "object") {
+        for (const [k, v] of Object.entries(patch.islandNames)) {
+          event.settings.islandNames.set(String(k), String(v));
+        }
+      }
     } else if (key === "status") {
       event.status = patch[key];
     }

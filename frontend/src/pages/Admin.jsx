@@ -256,6 +256,27 @@ function Overview({ token, run, flash }) {
               <B label="Checkpoint QRs" state={settingsDraft.checkpointQREnabled} set={(v) => setSettingsDraft({ ...settingsDraft, checkpointQREnabled: v })} />
               <B label="Leaderboard visible" state={settingsDraft.leaderboardVisible} set={(v) => setSettingsDraft({ ...settingsDraft, leaderboardVisible: v })} />
             </div>
+
+            <h4 style={{ fontFamily: "var(--font-heading)" }}>🏝️ Island Names</h4>
+            <p className="muted" style={{ fontSize: 13, marginTop: -8, marginBottom: 8 }}>
+              Customize the name shown for each island on the level map. Leave blank to use defaults.
+            </p>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
+              {[1,2,3,4,5,6,7,8,9,10,11,12,13].map((n) => (
+                <div className="field" key={n}>
+                  <label>Island {n}</label>
+                  <input
+                    value={settingsDraft.islandNames?.[n] ?? ""}
+                    onChange={(e) => setSettingsDraft({
+                      ...settingsDraft,
+                      islandNames: { ...settingsDraft.islandNames, [n]: e.target.value },
+                    })}
+                    placeholder={`Island ${n}`}
+                  />
+                </div>
+              ))}
+            </div>
+
             <div className="row" style={{ marginTop: 12 }}>
               <button className="btn" type="submit">
                 Save Settings

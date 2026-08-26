@@ -5,21 +5,35 @@ import { useAuth } from "../auth.jsx";
 
 const ISLAND_ICONS = ["", "🏝️", "🌊", "☁️", "⚔️", "🏰", "🏴‍☠️"];
 
+const DEFAULT_NAMES = {
+  1: "Loguetown", 2: "Baratie", 3: "Arlong Park", 4: "Alabasta",
+  5: "Skypiea", 6: "Water 7", 7: "Thriller Bark", 8: "Sabaody Archipelago",
+  9: "Marineford", 10: "Fish-Man Island", 11: "Dressrosa", 12: "Whole Cake Island", 13: "Wano Country",
+};
+
 export default function GrandLineMap() {
   const { team, token } = useAuth();
   const [me, setMe] = useState(null);
+  const [islandNames, setIslandNames] = useState({});
   const [totalLevels, setTotalLevels] = useState(0);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (!token) return;
-    api.get("/teams/me", { token })
-      .then((meData) => {
-        setMe(meData);
-        setTotalLevels(meData.totalLevels || meData.totalClues || 0);
-      })
-      .catch(() => setError("Could not load Grand Line map data."));
+    Promise.all([
+      api.get("/teams/me", { token }),
+      api.get("/event/status"),
+    ]).then(([meData, evData]) => {
+      setMe(meData);
+      setTotalLevels(meData.totalLevels || meData.totalClues || 0);
+      setIslandNames(evData.event?.islandNames || {});
+    }).catch(() => setError("Could not load Grand Line map data."));
   }, [token]);
+
+  const getIslandName = (level, total) => {
+    if (level === total) return "Laugh Tale";
+    return islandNames[level] || DEFAULT_NAMES[level] || `Island ${level}`;
+  };
 
   const teamData = me?.team || team;
   const currentLevel = teamData?.currentLevel || teamData?.currentClue || 1;
@@ -84,12 +98,12 @@ export default function GrandLineMap() {
           <div className="destination">
             {teamData?.status === "completed"
               ? "🏴‍☠️ LAUGH TALE REACHED!"
-              : `Island ${currentLevel}`}
+              : getIslandName(currentLevel, totalLevels)}
           </div>
           <p className="muted" style={{ margin: 0, fontSize: 14 }}>
             {teamData?.status === "completed"
               ? "You have found the One Piece! The greatest treasure is yours."
-              : `Follow the Log Pose to Island ${currentLevel}. Find the QR Code and decode its message.`}
+              : `Follow the Log Pose to ${getIslandName(currentLevel, totalLevels)}. Find the QR Code and decode its message.`}
           </p>
         </div>
 
@@ -103,7 +117,7 @@ export default function GrandLineMap() {
               const solved = solvedClues.find((s) => s.clueNumber === level);
 
               const icon = level === totalLevels ? "🏴‍☠️" : ISLAND_ICONS[level] || "🏝️";
-              const name = level === totalLevels ? "Laugh Tale" : `Island ${level}`;
+              const name = getIslandName(level, totalLevels);
 
               return (
                 <div key={level}>
