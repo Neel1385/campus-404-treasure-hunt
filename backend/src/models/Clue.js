@@ -11,7 +11,8 @@ const hintSchema = new mongoose.Schema(
 
 const clueSchema = new mongoose.Schema(
   {
-    clueNumber: { type: Number, required: true, unique: true, min: 1 },
+    eventId: { type: mongoose.Schema.Types.ObjectId, ref: "Event", required: true, index: true },
+    clueNumber: { type: Number, required: true, min: 1 },
     title: { type: String, required: true, trim: true },
     description: { type: String, required: true, trim: true },
     difficulty: { type: String, enum: Object.values(DIFFICULTY), default: DIFFICULTY.EASY },
@@ -19,11 +20,11 @@ const clueSchema = new mongoose.Schema(
     answerType: { type: String, enum: Object.values(ANSWER_TYPE), default: ANSWER_TYPE.TEXT },
     correctAnswer: { type: String, required: true, trim: true },
     acceptedAnswers: { type: [String], default: [] },
-    options: { type: [String], default: [] }, // for MULTIPLE_CHOICE
+    options: { type: [String], default: [] },
     points: { type: Number, default: 10, min: 0 },
     hints: { type: [hintSchema], default: [] },
     maxAttempts: { type: Number, default: 3 },
-    timeLimit: { type: Number }, // optional, in seconds
+    timeLimit: { type: Number },
     active: { type: Boolean, default: true },
     isFinal: { type: Boolean, default: false },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "Team" },
@@ -31,10 +32,12 @@ const clueSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+clueSchema.index({ eventId: 1, clueNumber: 1 }, { unique: true });
+
 clueSchema.methods.toSafeJSON = function () {
-  // NOTE: never expose correctAnswer / acceptedAnswers to players.
   return {
     id: this._id,
+    eventId: this.eventId,
     clueNumber: this.clueNumber,
     title: this.title,
     description: this.description,

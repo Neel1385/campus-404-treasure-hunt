@@ -6,5 +6,18 @@ const QRScan = require("./QRScan");
 const AuditLog = require("./AuditLog");
 const Event = require("./Event");
 const ScoreTransaction = require("./ScoreTransaction");
+const SideQuest = require("./SideQuest");
+const TeamClueAssignment = require("./TeamClueAssignment");
 
-module.exports = { Team, Clue, QRCode, Submission, QRScan, AuditLog, Event, ScoreTransaction };
+module.exports = {
+  Team,
+  Clue,
+  QRCode,
+  Submission,
+  QRScan,
+  AuditLog,
+  Event,
+  ScoreTransaction,
+  SideQuest,
+  TeamClueAssignment,
+};

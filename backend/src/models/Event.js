@@ -1,7 +1,19 @@
 const mongoose = require("mongoose");
 const { EVENT_STATUS } = require("../utils/constants");
 
-// A single event document holds the event lifecycle and admin settings.
+const themeSchema = new mongoose.Schema(
+  {
+    logo: { type: String, default: "" },
+    primaryColor: { type: String, default: "#10b981" },
+    secondaryColor: { type: String, default: "#065f46" },
+    accentColor: { type: String, default: "#f59e0b" },
+    backgroundColor: { type: String, default: "#0f172a" },
+    textColor: { type: String, default: "#f8fafc" },
+    heroBanner: { type: String, default: "" },
+  },
+  { _id: false }
+);
+
 const eventSchema = new mongoose.Schema(
   {
     name: { type: String, default: "CAMPUS 404" },
@@ -9,12 +21,13 @@ const eventSchema = new mongoose.Schema(
     status: {
       type: String,
       enum: Object.values(EVENT_STATUS),
-      default: EVENT_STATUS.NOT_STARTED,
+      default: EVENT_STATUS.DRAFT,
     },
     startTime: { type: Date },
     endTime: { type: Date },
     duration: { type: Number, default: 60 }, // minutes
     pausedAt: { type: Date },
+    theme: { type: themeSchema, default: () => ({}) },
     settings: {
       maxTeamSize: { type: Number, default: 4 },
       maxAttemptsPerClue: { type: Number, default: 3 },
@@ -22,6 +35,25 @@ const eventSchema = new mongoose.Schema(
       wrongScanPenalty: { type: Number, default: 5 },
       maxWrongScans: { type: Number, default: 10 },
       lockAfterMaxWrongScans: { type: Boolean, default: false },
+
+      // Wrong-QR Blocking Engine
+      wrongScanBlockingEnabled: { type: Boolean, default: false },
+      wrongScanBlockStrategy: { type: String, enum: ["TIME", "SCAN_COUNT", "BOTH"], default: "TIME" },
+      wrongScanBlockThreshold: { type: Number, default: 3 },
+      wrongScanBlockDuration: { type: Number, default: 5 }, // minutes
+      wrongScanBlockedScanCount: { type: Number, default: 3 },
+
+      // Randomized clue pool options
+      cluesPerTeam: { type: Number, default: 5 },
+      finalClueId: { type: mongoose.Schema.Types.ObjectId, ref: "Clue" },
+
+      // Side Quests & Final Challenge
+      sideQuestsEnabled: { type: Boolean, default: true },
+      finalChallengeType: { type: String, enum: ["SECRET_CODE", "SECRET_FRAGMENTS", "FINAL_QR", "FINAL_QUESTION"], default: "SECRET_CODE" },
+      finalSecretCode: { type: String, default: "CAMPUS404" },
+      finalQuestionText: { type: String, default: "" },
+      finalQuestionAnswer: { type: String, default: "" },
+
       wrongAnswerPenaltyEnabled: { type: Boolean, default: false },
       wrongAnswerPenalty: { type: Number, default: 0 },
       hint1Penalty: { type: Number, default: 3 },
@@ -43,7 +75,7 @@ const eventSchema = new mongoose.Schema(
       speedBonusP2: { type: Number, default: 5 },
       speedBonusT3: { type: Number, default: 300 },
       speedBonusP3: { type: Number, default: 2 },
-      finalChallengePoints: { type: Number, default: 0 },
+      finalChallengePoints: { type: Number, default: 100 },
       islandNames: {
         type: Map,
         of: String,
@@ -68,23 +100,21 @@ const eventSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// Effective status. If the clock ran past endTime, the event is ENDED.
 eventSchema.methods.effectiveStatus = function () {
-  if (this.status === EVENT_STATUS.ENDED) return EVENT_STATUS.ENDED;
-  if (this.status === EVENT_STATUS.NOT_STARTED) return EVENT_STATUS.NOT_STARTED;
+  if (this.status === EVENT_STATUS.ENDED || this.status === EVENT_STATUS.ARCHIVED) return this.status;
+  if (this.status === EVENT_STATUS.DRAFT || this.status === EVENT_STATUS.READY) return this.status;
   if (this.status === EVENT_STATUS.PAUSED) return EVENT_STATUS.PAUSED;
   if (this.endTime && new Date() >= this.endTime) return EVENT_STATUS.ENDED;
-  return EVENT_STATUS.ACTIVE;
+  return EVENT_STATUS.RUNNING; // or ACTIVE
 };
 
 eventSchema.methods.remainingMs = function () {
   const status = this.effectiveStatus();
-  if (status === EVENT_STATUS.ENDED) return 0;
-  if (status === EVENT_STATUS.NOT_STARTED) {
+  if (status === EVENT_STATUS.ENDED || status === EVENT_STATUS.ARCHIVED) return 0;
+  if (status === EVENT_STATUS.DRAFT || status === EVENT_STATUS.READY) {
     return this.startTime ? Math.max(0, this.startTime - new Date()) : 0;
   }
   if (status === EVENT_STATUS.PAUSED) {
-    // Time is frozen; report what was left when paused.
     return this.pausedAt
       ? Math.max(0, this.endTime - this.pausedAt)
       : this.endTime

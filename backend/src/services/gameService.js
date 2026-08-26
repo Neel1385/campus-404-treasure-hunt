@@ -1,11 +1,101 @@
-const { Team, Clue, QRCode, QRScan, Submission } = require("../models");
+const { Team, Clue, QRCode, QRScan, Submission, SideQuest, TeamClueAssignment, AuditLog } = require("../models");
 const { QR_TYPE, TEAM_STATUS, SCORE_TRANSACTION_TYPE } = require("../utils/constants");
 const { normalizeAnswer, buildAcceptedList } = require("../utils/answerNormalizer");
 const eventService = require("./eventService");
 const scoreService = require("./scoreService");
+const { eventBus, DOMAIN_EVENTS } = require("../events/eventBus");
 
-// --- QR scanning ------------------------------------------------------------
+// --- Blocking Check Helper ---
+async function checkTeamBlocked(team) {
+  if (team.blocked) {
+    // Check TIME expiration
+    if (team.blockedUntil && new Date() > team.blockedUntil) {
+      team.blocked = false;
+      team.blockedUntil = undefined;
+      team.remainingBlockedScans = 0;
+      team.blockReason = "";
+      await team.save();
+      eventBus.publish(DOMAIN_EVENTS.TEAM_UNBLOCKED, { eventId: team.eventId, teamId: team._id });
+      return;
+    }
 
+    // Check SCAN_COUNT decrement
+    if (team.remainingBlockedScans && team.remainingBlockedScans > 0) {
+      team.remainingBlockedScans -= 1;
+      if (team.remainingBlockedScans === 0 && !team.blockedUntil) {
+        team.blocked = false;
+        team.blockReason = "";
+        await team.save();
+        eventBus.publish(DOMAIN_EVENTS.TEAM_UNBLOCKED, { eventId: team.eventId, teamId: team._id });
+        return;
+      }
+      await team.save();
+    }
+
+    const err = new Error(team.blockReason || "Your team is temporarily blocked from performing game actions.");
+    err.status = 403;
+    err.code = "TEAM_BLOCKED";
+    throw err;
+  }
+}
+
+// --- Randomized Clue Assignments ---
+async function generateRandomClueAssignments(eventId) {
+  const event = await eventService.getEventById(eventId);
+  const settings = event.settings || {};
+  const cluesPerTeam = settings.cluesPerTeam || 5;
+
+  const allClues = await Clue.find({ eventId, active: true }).sort({ clueNumber: 1 });
+  if (allClues.length === 0) {
+    throw new Error("No active clues available to assign.");
+  }
+
+  let finalClue = null;
+  if (settings.finalClueId) {
+    finalClue = allClues.find((c) => String(c._id) === String(settings.finalClueId));
+  }
+  if (!finalClue) {
+    finalClue = allClues.find((c) => c.isFinal) || allClues[allClues.length - 1];
+  }
+
+  const normalClues = allClues.filter((c) => String(c._id) !== String(finalClue._id));
+  const teams = await Team.find({ eventId, role: "player" });
+
+  let assignmentsCreated = 0;
+
+  for (const team of teams) {
+    await TeamClueAssignment.deleteMany({ eventId, teamId: team._id });
+
+    const shuffled = [...normalClues].sort(() => 0.5 - Math.random());
+    const selected = shuffled.slice(0, Math.min(cluesPerTeam, normalClues.length));
+
+    for (let i = 0; i < selected.length; i++) {
+      await TeamClueAssignment.create({
+        eventId,
+        teamId: team._id,
+        clueId: selected[i]._id,
+        sequenceNumber: i + 1,
+        isFinal: false,
+      });
+      assignmentsCreated++;
+    }
+
+    await TeamClueAssignment.create({
+      eventId,
+      teamId: team._id,
+      clueId: finalClue._id,
+      sequenceNumber: selected.length + 1,
+      isFinal: true,
+    });
+    assignmentsCreated++;
+
+    eventBus.publish(DOMAIN_EVENTS.CLUE_ASSIGNED, { eventId, teamId: team._id });
+  }
+
+  return { teamsProcessed: teams.length, totalAssignments: assignmentsCreated };
+}
+
+// --- QR Scanning ---
 async function processQRScan(team, rawQrId, event) {
   eventService.assertEventActive(event);
 
@@ -16,6 +106,8 @@ async function processQRScan(team, rawQrId, event) {
     throw err;
   }
 
+  await checkTeamBlocked(team);
+
   const qrId = String(rawQrId || "").trim().toUpperCase();
   if (!qrId) {
     const err = new Error("No QR code detected.");
@@ -24,16 +116,25 @@ async function processQRScan(team, rawQrId, event) {
     throw err;
   }
 
-  const qr = await QRCode.findOne({ qrId });
-  const settings = event.settings;
+  const qr = await QRCode.findOne({ eventId: event._id, qrId });
+  const settings = event.settings || {};
 
   if (!qr || !qr.active) {
     return handleWrongScan(team, qrId, null, null, event, "Wrong checkpoint. Keep searching.");
   }
 
-  const alreadyScanned = await QRScan.findOne({ teamId: team._id, qrId, correct: true });
+  // Define clue associated with QR
+  const clue = qr.clueId ? await Clue.findById(qr.clueId) : null;
+
+  // DUMMY QR handling
+  if (qr.type === QR_TYPE.DUMMY) {
+    eventBus.publish(DOMAIN_EVENTS.WRONG_QR_CODE_SCANNED, { eventId: event._id, teamId: team._id, qrId });
+    return handleWrongScan(team, qrId, qr, null, event, "Dummy QR detected! Nothing useful here.");
+  }
+
+  const alreadyScanned = await QRScan.findOne({ eventId: event._id, teamId: team._id, qrId, correct: true });
   if (alreadyScanned) {
-    if (qr.type === QR_TYPE.NORMAL) {
+    if (qr.type === QR_TYPE.NORMAL || qr.type === QR_TYPE.ROAD_PONEGLYPH) {
       return {
         success: true,
         correct: false,
@@ -48,22 +149,21 @@ async function processQRScan(team, rawQrId, event) {
     throw err;
   }
 
-  const clue = qr.clueId ? await Clue.findById(qr.clueId) : null;
-
   switch (qr.type) {
     case QR_TYPE.BONUS: {
       if (!settings.bonusQREnabled) return wrongBecause("Bonus QR codes are disabled.");
-      await QRScan.create({ teamId: team._id, qrId, qrType: qr.type, clueId: qr.clueId, correct: true });
+      await QRScan.create({ eventId: event._id, teamId: team._id, qrId, qrType: qr.type, clueId: qr.clueId, correct: true });
       const bonusPoints = qr.points || 0;
       if (bonusPoints > 0) {
         const { newPoints } = await scoreService.recordTransaction(
           team._id,
           SCORE_TRANSACTION_TYPE.BONUS,
           bonusPoints,
-          { reason: "Bonus QR scanned", qrId, level: qr.level || team.currentLevel, allowNegative: settings.allowNegativeScore }
+          { eventId: event._id, reason: "Bonus QR scanned", qrId, level: qr.level || team.currentLevel, allowNegative: settings.allowNegativeScore }
         );
         team.points = newPoints;
       }
+      eventBus.publish(DOMAIN_EVENTS.BONUS_QR_CODE_SCANNED, { eventId: event._id, teamId: team._id, points: bonusPoints });
       return {
         success: true,
         correct: true,
@@ -76,16 +176,17 @@ async function processQRScan(team, rawQrId, event) {
     case QR_TYPE.TRAP: {
       if (!settings.trapQREnabled) return wrongBecause("Trap QR codes are disabled.");
       const penalty = -(qr.points || 0);
-      await QRScan.create({ teamId: team._id, qrId, qrType: qr.type, clueId: qr.clueId, correct: true, penalty: Math.abs(penalty) });
+      await QRScan.create({ eventId: event._id, teamId: team._id, qrId, qrType: qr.type, clueId: qr.clueId, correct: true, penalty: Math.abs(penalty) });
       if (penalty < 0) {
         const { newPoints } = await scoreService.recordTransaction(
           team._id,
           SCORE_TRANSACTION_TYPE.TRAP,
           penalty,
-          { reason: "Trap QR scanned", qrId, level: qr.level || team.currentLevel, allowNegative: settings.allowNegativeScore }
+          { eventId: event._id, reason: "Trap QR scanned", qrId, level: qr.level || team.currentLevel, allowNegative: settings.allowNegativeScore }
         );
         team.points = newPoints;
       }
+      eventBus.publish(DOMAIN_EVENTS.TRAP_QR_CODE_TRIGGERED, { eventId: event._id, teamId: team._id, penalty: Math.abs(penalty) });
       return {
         success: true,
         correct: true,
@@ -95,87 +196,33 @@ async function processQRScan(team, rawQrId, event) {
         totalPoints: team.points,
       };
     }
-    case QR_TYPE.HINT: {
-      if (!settings.hintQREnabled) return wrongBecause("Hint QR codes are disabled.");
-      await QRScan.create({ teamId: team._id, qrId, qrType: qr.type, clueId: qr.clueId, correct: true });
-      return {
-        success: true,
-        correct: true,
-        hintQR: true,
-        message: "Hint unlocked",
-        hint: qr.hintText || "Keep searching around this area.",
-      };
-    }
-    case QR_TYPE.CHECKPOINT: {
-      if (!settings.checkpointQREnabled) return wrongBecause("Checkpoint QR codes are disabled.");
-      await QRScan.create({ teamId: team._id, qrId, qrType: qr.type, clueId: qr.clueId, correct: true });
-      return {
-        success: true,
-        correct: true,
-        checkpoint: true,
-        message: `Checkpoint confirmed: ${qr.checkpointName || "location verified"}`,
-      };
-    }
-    case QR_TYPE.ROAD_PONEGLYPH: {
-      if (!clue) {
-        return handleWrongScan(team, qrId, qr, null, event, "Wrong checkpoint. Keep searching.");
-      }
-
-      const qrLevel = qr.level || clue.clueNumber;
-      if (qrLevel !== team.currentLevel) {
-        return handleWrongScan(team, qrId, qr, clue, event,
-          "Wrong checkpoint. This Road Poneglyph is not for your current island.");
-      }
-
-      await QRScan.create({ teamId: team._id, qrId, qrType: qr.type, clueId: qr.clueId, correct: true, level: qrLevel });
-
-      const roadPoints = qr.points || Number(settings.correctQRPoints) || Number(settings.pointsPerScan) || 0;
-      if (roadPoints > 0) {
-        const { newPoints } = await scoreService.recordTransaction(
-          team._id,
-          SCORE_TRANSACTION_TYPE.ROAD_PONEGLYPH,
-          roadPoints,
-          { reason: "Road Poneglyph discovered", qrId, clueId: clue._id, level: qrLevel, allowNegative: settings.allowNegativeScore }
-        );
-        team.points = newPoints;
-      }
-
-      team.clueUnlocked = true;
-      team.levelStartedAt = new Date();
-      await Team.updateOne({ _id: team._id }, { $set: { clueUnlocked: true, levelStartedAt: team.levelStartedAt } });
-
-      return {
-        success: true,
-        correct: true,
-        roadPoneglyph: true,
-        message: `ROAD PONEGLYPH DISCOVERED! +${roadPoints} bounty`,
-        pointsEarned: roadPoints,
-        totalPoints: team.points,
-        currentLevel: team.currentLevel,
-        clue: clue.toSafeJSON(),
-      };
-    }
     case QR_TYPE.NORMAL:
+    case QR_TYPE.ROAD_PONEGLYPH:
     default: {
       if (!clue) {
         return handleWrongScan(team, qrId, qr, null, event, "Wrong checkpoint. Keep searching.");
       }
 
-      const qrLevel = qr.level || clue.clueNumber;
-      if (qrLevel !== team.currentLevel) {
-        return handleWrongScan(team, qrId, qr, clue, event,
-          "Wrong checkpoint. This QR is not available for your current progress.");
+      // Check assignment sequence if enabled
+      const currentAssignment = await TeamClueAssignment.findOne({
+        eventId: event._id,
+        teamId: team._id,
+        sequenceNumber: team.currentLevel,
+      });
+
+      if (currentAssignment && String(currentAssignment.clueId) !== String(clue._id)) {
+        return handleWrongScan(team, qrId, qr, clue, event, "Wrong checkpoint. This QR is not for your assigned clue sequence.");
       }
 
-      await QRScan.create({ teamId: team._id, qrId, qrType: qr.type, clueId: qr.clueId, correct: true, level: qrLevel });
+      await QRScan.create({ eventId: event._id, teamId: team._id, qrId, qrType: qr.type, clueId: qr.clueId, correct: true, level: team.currentLevel });
 
-      const correctQRPoints = Number(settings.correctQRPoints) || Number(settings.pointsPerScan) || 0;
-      if (correctQRPoints > 0) {
+      const correctPoints = Number(settings.correctQRPoints) || Number(settings.pointsPerScan) || 0;
+      if (correctPoints > 0) {
         const { newPoints } = await scoreService.recordTransaction(
           team._id,
           SCORE_TRANSACTION_TYPE.CORRECT_QR,
-          correctQRPoints,
-          { reason: "Correct QR scan", qrId, clueId: clue._id, level: qrLevel, allowNegative: settings.allowNegativeScore }
+          correctPoints,
+          { eventId: event._id, reason: "Correct QR scan", qrId, clueId: clue._id, level: team.currentLevel, allowNegative: settings.allowNegativeScore }
         );
         team.points = newPoints;
       }
@@ -184,11 +231,13 @@ async function processQRScan(team, rawQrId, event) {
       team.levelStartedAt = new Date();
       await Team.updateOne({ _id: team._id }, { $set: { clueUnlocked: true, levelStartedAt: team.levelStartedAt } });
 
+      eventBus.publish(DOMAIN_EVENTS.QR_CODE_SCANNED, { eventId: event._id, teamId: team._id, qrId, clueId: clue._id });
+
       return {
         success: true,
         correct: true,
-        message: "Correct checkpoint!",
-        pointsEarned: correctQRPoints,
+        message: "Correct checkpoint unlocked!",
+        pointsEarned: correctPoints,
         totalPoints: team.points,
         currentLevel: team.currentLevel,
         clue: clue.toSafeJSON(),
@@ -202,9 +251,10 @@ function wrongBecause(message) {
 }
 
 async function handleWrongScan(team, qrId, qr, clue, event, message) {
-  const settings = event.settings;
+  const settings = event.settings || {};
 
   await QRScan.create({
+    eventId: event._id,
     teamId: team._id,
     qrId,
     qrType: qr ? qr.type : "UNKNOWN",
@@ -214,7 +264,6 @@ async function handleWrongScan(team, qrId, qr, clue, event, message) {
   });
 
   const previousScore = team.points;
-
   let penaltyApplied = 0;
   if (settings.wrongScanPenaltyEnabled) {
     penaltyApplied = Number(settings.wrongScanPenalty) || 0;
@@ -223,21 +272,33 @@ async function handleWrongScan(team, qrId, qr, clue, event, message) {
         team._id,
         SCORE_TRANSACTION_TYPE.WRONG_QR,
         -penaltyApplied,
-        { reason: message, qrId, level: team.currentLevel, allowNegative: settings.allowNegativeScore }
+        { eventId: event._id, reason: message, qrId, level: team.currentLevel, allowNegative: settings.allowNegativeScore }
       );
       team.points = newPoints;
     }
   }
 
-  const updateOps = { $inc: { wrongScans: 1 } };
   const newWrongScans = (team.wrongScans || 0) + 1;
-  let lockClue = false;
-  if (settings.lockAfterMaxWrongScans && settings.maxWrongScans && newWrongScans >= Number(settings.maxWrongScans)) {
-    lockClue = true;
-    updateOps.$set = { lockedClue: true };
+  team.wrongScans = newWrongScans;
+
+  if (settings.wrongScanBlockingEnabled) {
+    const threshold = Number(settings.wrongScanBlockThreshold) || 3;
+    if (newWrongScans >= threshold) {
+      team.blocked = true;
+      team.blockReason = `Blocked due to ${newWrongScans} wrong QR scans.`;
+      if (settings.wrongScanBlockStrategy === "TIME" || settings.wrongScanBlockStrategy === "BOTH") {
+        const durationMins = Number(settings.wrongScanBlockDuration) || 5;
+        team.blockedUntil = new Date(Date.now() + durationMins * 60 * 1000);
+      }
+      if (settings.wrongScanBlockStrategy === "SCAN_COUNT" || settings.wrongScanBlockStrategy === "BOTH") {
+        team.remainingBlockedScans = Number(settings.wrongScanBlockedScanCount) || 3;
+      }
+      eventBus.publish(DOMAIN_EVENTS.TEAM_BLOCKED, { eventId: event._id, teamId: team._id, reason: team.blockReason });
+    }
   }
 
-  await Team.updateOne({ _id: team._id }, updateOps);
+  await team.save();
+  eventBus.publish(DOMAIN_EVENTS.WRONG_QR_CODE_SCANNED, { eventId: event._id, teamId: team._id, qrId, wrongScans: newWrongScans });
 
   return {
     success: true,
@@ -248,20 +309,14 @@ async function handleWrongScan(team, qrId, qr, clue, event, message) {
     totalPoints: team.points,
     currentLevel: team.currentLevel,
     wrongScanCount: newWrongScans,
+    blocked: team.blocked,
   };
 }
 
-// --- Answer submission ------------------------------------------------------
-
+// --- Answer Submission & Final Challenge ---
 async function submitAnswer(team, clueId, rawAnswer, event) {
   eventService.assertEventActive(event);
-
-  if (team.status === TEAM_STATUS.DISABLED) {
-    const err = new Error("Your team has been disabled. Contact an organizer.");
-    err.status = 403;
-    err.code = "TEAM_DISABLED";
-    throw err;
-  }
+  await checkTeamBlocked(team);
 
   if (team.status === TEAM_STATUS.COMPLETED) {
     const err = new Error("Mission already complete. Well done!");
@@ -270,14 +325,7 @@ async function submitAnswer(team, clueId, rawAnswer, event) {
     throw err;
   }
 
-  if (!clueId || rawAnswer === undefined || rawAnswer === null || String(rawAnswer).trim() === "") {
-    const err = new Error("Answer is required.");
-    err.status = 400;
-    err.code = "BAD_REQUEST";
-    throw err;
-  }
-
-  const clue = await Clue.findById(clueId);
+  const clue = await Clue.findOne({ eventId: event._id, _id: clueId });
   if (!clue || !clue.active) {
     const err = new Error("Clue not found.");
     err.status = 404;
@@ -285,8 +333,15 @@ async function submitAnswer(team, clueId, rawAnswer, event) {
     throw err;
   }
 
-  if (clue.clueNumber !== team.currentClue) {
-    const err = new Error("You can only answer your current clue.");
+  // Validate sequence assignment if present
+  const currentAssignment = await TeamClueAssignment.findOne({
+    eventId: event._id,
+    teamId: team._id,
+    sequenceNumber: team.currentLevel,
+  });
+
+  if (currentAssignment && String(currentAssignment.clueId) !== String(clue._id)) {
+    const err = new Error("You can only answer your current assigned clue.");
     err.status = 409;
     err.code = "WRONG_CLUE";
     throw err;
@@ -296,16 +351,6 @@ async function submitAnswer(team, clueId, rawAnswer, event) {
     const err = new Error("Scan the correct QR code first to unlock this clue.");
     err.status = 409;
     err.code = "CLUE_LOCKED";
-    throw err;
-  }
-
-  const attempts = await Submission.countDocuments({ teamId: team._id, clueId });
-  const maxAttempts = clue.maxAttempts || event.settings.maxAttemptsPerClue || 3;
-  if (attempts >= maxAttempts) {
-    await Team.updateOne({ _id: team._id }, { $set: { lockedClue: true } });
-    const err = new Error("Maximum attempts reached. This clue is locked - contact an organizer.");
-    err.status = 409;
-    err.code = "MAX_ATTEMPTS";
     throw err;
   }
 
@@ -317,8 +362,11 @@ async function submitAnswer(team, clueId, rawAnswer, event) {
     return await handleCorrectAnswer(team, clue, event);
   }
 
+  const attempts = await Submission.countDocuments({ eventId: event._id, teamId: team._id, clueId });
   const attemptNumber = attempts + 1;
+
   await Submission.create({
+    eventId: event._id,
     teamId: team._id,
     clueId,
     clueNumber: clue.clueNumber,
@@ -328,48 +376,17 @@ async function submitAnswer(team, clueId, rawAnswer, event) {
     attemptNumber,
   });
 
-  let penaltyApplied = 0;
-  if (event.settings.wrongAnswerPenaltyEnabled && event.settings.wrongAnswerPenalty) {
-    penaltyApplied = Number(event.settings.wrongAnswerPenalty) || 0;
-    if (penaltyApplied > 0) {
-      const { newPoints } = await scoreService.recordTransaction(
-        team._id,
-        SCORE_TRANSACTION_TYPE.WRONG_ANSWER,
-        -penaltyApplied,
-        { reason: "Wrong answer", clueId, level: team.currentLevel, meta: { attemptNumber }, allowNegative: event.settings.allowNegativeScore }
-      );
-      team.points = newPoints;
-    }
-  }
-
-  let locked = false;
-  if (attemptNumber >= maxAttempts) {
-    await Team.updateOne({ _id: team._id }, { $set: { lockedClue: true } });
-    locked = true;
-  }
-
   return {
     success: true,
     correct: false,
     message: "Incorrect answer. Try again.",
-    attemptsLeft: Math.max(0, maxAttempts - attemptNumber),
-    penaltyApplied,
-    locked,
-    previousScore: team.points,
     totalPoints: team.points,
   };
 }
 
 async function handleCorrectAnswer(team, clue, event) {
-  const guarded = await Team.findOneAndUpdate({ _id: team._id, currentClue: clue.clueNumber }, {}, { new: true });
-  if (!guarded) {
-    const err = new Error("This clue has already been completed.");
-    err.status = 409;
-    err.code = "DUPLICATE_SUBMISSION";
-    throw err;
-  }
-
   await Submission.create({
+    eventId: event._id,
     teamId: team._id,
     clueId: clue._id,
     clueNumber: clue.clueNumber,
@@ -378,125 +395,70 @@ async function handleCorrectAnswer(team, clue, event) {
     pointsAwarded: clue.points,
   });
 
-  const settings = event.settings;
-  let totalPointsEarned = 0;
-
-  if (clue.points > 0) {
+  let pointsEarned = clue.points || 0;
+  if (pointsEarned > 0) {
     const { newPoints } = await scoreService.recordTransaction(
       team._id,
       SCORE_TRANSACTION_TYPE.CLUE_COMPLETED,
-      clue.points,
-      { reason: `Clue "${clue.title}" solved`, clueId: clue._id, level: clue.clueNumber, allowNegative: settings.allowNegativeScore }
+      pointsEarned,
+      { eventId: event._id, reason: `Clue "${clue.title}" solved`, clueId: clue._id, level: team.currentLevel, allowNegative: event.settings.allowNegativeScore }
     );
     team.points = newPoints;
-    totalPointsEarned += clue.points;
-  }
-
-  const extraCluePoints = Number(settings.clueCompletionPoints) || 0;
-  if (extraCluePoints > 0) {
-    const { newPoints } = await scoreService.recordTransaction(
-      team._id,
-      SCORE_TRANSACTION_TYPE.CLUE_COMPLETED,
-      extraCluePoints,
-      { reason: "Clue completion bonus", clueId: clue._id, level: clue.clueNumber, allowNegative: settings.allowNegativeScore }
-    );
-    team.points = newPoints;
-    totalPointsEarned += extraCluePoints;
-  }
-
-  let speedBonus = 0;
-  if (team.levelStartedAt) {
-    speedBonus = scoreService.calculateSpeedBonus(team.levelStartedAt, settings);
-  }
-  if (speedBonus > 0) {
-    const { newPoints } = await scoreService.recordTransaction(
-      team._id,
-      SCORE_TRANSACTION_TYPE.SPEED_BONUS,
-      speedBonus,
-      { reason: "Speed bonus", clueId: clue._id, level: clue.clueNumber, allowNegative: settings.allowNegativeScore }
-    );
-    team.points = newPoints;
-    totalPointsEarned += speedBonus;
-  }
-
-  let finalBonus = 0;
-  if (clue.isFinal) {
-    finalBonus = Number(settings.finalChallengePoints) || 0;
-    if (finalBonus > 0) {
-      const { newPoints } = await scoreService.recordTransaction(
-        team._id,
-        SCORE_TRANSACTION_TYPE.FINAL_CHALLENGE,
-        finalBonus,
-        { reason: "Final challenge completed", clueId: clue._id, level: clue.clueNumber, allowNegative: settings.allowNegativeScore }
-      );
-      team.points = newPoints;
-      totalPointsEarned += finalBonus;
-    }
   }
 
   team.solvedClues.push({
     clueNumber: clue.clueNumber,
     title: clue.title,
     solvedAt: new Date(),
-    pointsEarned: totalPointsEarned,
+    pointsEarned,
   });
 
-  if (!team.completedLevels.includes(clue.clueNumber)) {
-    team.completedLevels.push(clue.clueNumber);
-  }
+  const nextAssignment = await TeamClueAssignment.findOne({
+    eventId: event._id,
+    teamId: team._id,
+    sequenceNumber: team.currentLevel + 1,
+  });
 
-  const nextClue = await Clue.findOne({ clueNumber: clue.clueNumber + 1, active: true });
-
-  if (clue.isFinal || !nextClue) {
+  if (clue.isFinal || !nextAssignment) {
     team.status = TEAM_STATUS.COMPLETED;
     team.endTime = new Date();
     team.finalScore = team.points;
     team.clueUnlocked = false;
-    team.levelStartedAt = undefined;
     await team.save();
+
+    eventBus.publish(DOMAIN_EVENTS.FINAL_CHALLENGE_COMPLETED, { eventId: event._id, teamId: team._id, finalScore: team.finalScore });
 
     return {
       success: true,
       correct: true,
       missionComplete: true,
       message: "MISSION COMPLETE!",
-      points: team.points,
-      finalScore: team.finalScore,
-      pointsEarned: totalPointsEarned,
-      speedBonus,
-      finalBonus,
       totalPoints: team.points,
       completionTime: team.endTime,
-      completed: true,
     };
   }
 
-  const newLevel = clue.clueNumber + 1;
-  team.currentClue = newLevel;
-  team.currentLevel = newLevel;
+  team.currentLevel += 1;
+  team.currentClue = team.currentLevel;
   team.clueUnlocked = false;
-  team.lockedClue = false;
-  team.levelStartedAt = undefined;
   await team.save();
+
+  eventBus.publish(DOMAIN_EVENTS.CLUE_COMPLETED, { eventId: event._id, teamId: team._id, clueId: clue._id });
 
   return {
     success: true,
     correct: true,
-    message: `Correct! +${totalPointsEarned} points`,
-    points: team.points,
-    pointsEarned: totalPointsEarned,
-    speedBonus,
-    levelCompleted: clue.clueNumber,
-    newLevel,
+    message: `Correct! +${pointsEarned} points`,
+    pointsEarned,
+    newLevel: team.currentLevel,
     totalPoints: team.points,
-    nextClueTitle: nextClue ? nextClue.title : null,
   };
 }
 
-// --- Hints ------------------------------------------------------------------
-
+// --- Hints ---
 async function useHint(team, clueId, hintNumber, event) {
   eventService.assertEventActive(event);
+  await checkTeamBlocked(team);
 
   if (![1, 2].includes(Number(hintNumber))) {
     const err = new Error("Hint number must be 1 or 2.");
@@ -505,18 +467,11 @@ async function useHint(team, clueId, hintNumber, event) {
     throw err;
   }
 
-  const clue = await Clue.findById(clueId);
+  const clue = await Clue.findOne({ eventId: event._id, _id: clueId });
   if (!clue || !clue.active) {
     const err = new Error("Clue not found.");
     err.status = 404;
     err.code = "CLUE_NOT_FOUND";
-    throw err;
-  }
-
-  if (clue.clueNumber !== team.currentClue) {
-    const err = new Error("You can only request hints for your current clue.");
-    err.status = 409;
-    err.code = "WRONG_CLUE";
     throw err;
   }
 
@@ -527,7 +482,7 @@ async function useHint(team, clueId, hintNumber, event) {
     throw err;
   }
 
-  const already = team.hintsUsed.find((h) => h.clueNumber === clue.clueNumber && h.hintNumber === Number(hintNumber));
+  const already = team.hintsUsed.find((h) => String(h.clueNumber) === String(clue.clueNumber) && h.hintNumber === Number(hintNumber));
   if (already) {
     const err = new Error("This hint has already been used.");
     err.status = 409;
@@ -554,7 +509,7 @@ async function useHint(team, clueId, hintNumber, event) {
       team._id,
       SCORE_TRANSACTION_TYPE.HINT_PENALTY,
       -penalty,
-      { reason: `Hint ${hintNumber} used`, clueId, level: team.currentLevel, meta: { hintNumber }, allowNegative: event.settings.allowNegativeScore }
+      { eventId: event._id, reason: `Hint ${hintNumber} used`, clueId, level: team.currentLevel, meta: { hintNumber }, allowNegative: event.settings.allowNegativeScore }
     );
     team.points = newPoints;
   }
@@ -567,6 +522,8 @@ async function useHint(team, clueId, hintNumber, event) {
   });
   await team.save();
 
+  eventBus.publish(DOMAIN_EVENTS.HINT_USED, { eventId: event._id, teamId: team._id, clueId, hintNumber });
+
   return {
     success: true,
     message: `Hint ${hintNumber} used.`,
@@ -576,4 +533,151 @@ async function useHint(team, clueId, hintNumber, event) {
   };
 }
 
-module.exports = { processQRScan, submitAnswer, useHint };
+// --- Side Quest Completion ---
+async function completeSideQuest(eventId, team, questId, answer) {
+  const quest = await SideQuest.findOne({ eventId, _id: questId });
+  if (!quest || !quest.enabled) {
+    throw new Error("Side quest not found or disabled.");
+  }
+
+  if (team.completedSideQuests.includes(quest._id)) {
+    throw new Error("Side quest already completed.");
+  }
+
+  if (quest.answer && normalizeAnswer("TEXT", answer) !== normalizeAnswer("TEXT", quest.answer)) {
+    return { success: false, message: "Incorrect side quest answer." };
+  }
+
+  team.completedSideQuests.push(quest._id);
+
+  if (quest.secretCodeReward) {
+    team.collectedSecretFragments.push(quest.secretCodeReward);
+  }
+
+  if (quest.points > 0) {
+    const { newPoints } = await scoreService.recordTransaction(
+      team._id,
+      SCORE_TRANSACTION_TYPE.SIDE_QUEST,
+      quest.points,
+      { eventId, reason: `Side Quest "${quest.title}" completed` }
+    );
+    team.points = newPoints;
+  }
+
+  await team.save();
+  eventBus.publish(DOMAIN_EVENTS.SIDE_QUEST_COMPLETED, { eventId, teamId: team._id, questId: quest._id });
+
+  return {
+    success: true,
+    message: `Side Quest completed! +${quest.points} points`,
+    rewardCode: quest.secretCodeReward,
+    totalPoints: team.points,
+  };
+}
+
+// --- Admin Controls ---
+async function adminAdjustScore(eventId, teamId, amount, reason, adminTeam) {
+  const team = await Team.findOne({ eventId, _id: teamId });
+  if (!team) throw new Error("Team not found.");
+
+  const { newPoints } = await scoreService.recordTransaction(
+    team._id,
+    SCORE_TRANSACTION_TYPE.ADMIN_ADJUSTMENT,
+    Number(amount),
+    { eventId, reason: reason || "Admin adjustment", adminId: adminTeam._id }
+  );
+
+  team.points = newPoints;
+  await team.save();
+
+  await AuditLog.create({
+    eventId,
+    adminId: adminTeam._id,
+    adminName: adminTeam.teamName,
+    action: "ADMIN_ADJUST_SCORE",
+    targetType: "Team",
+    targetId: team._id,
+    note: `Adjusted score by ${amount}: ${reason}`,
+  });
+
+  eventBus.publish(DOMAIN_EVENTS.ADMIN_SCORE_ADJUSTED, { eventId, teamId: team._id, amount, reason });
+
+  return { success: true, newPoints };
+}
+
+async function adminToggleBlockTeam(eventId, teamId, block, options = {}, adminTeam) {
+  const team = await Team.findOne({ eventId, _id: teamId });
+  if (!team) throw new Error("Team not found.");
+
+  team.blocked = !!block;
+  if (block) {
+    team.blockReason = options.reason || "Blocked by organizer.";
+    if (options.duration) {
+      team.blockedUntil = new Date(Date.now() + Number(options.duration) * 60 * 1000);
+    }
+    if (options.blockedScanCount) {
+      team.remainingBlockedScans = Number(options.blockedScanCount);
+    }
+    eventBus.publish(DOMAIN_EVENTS.ADMIN_TEAM_BLOCKED, { eventId, teamId: team._id });
+  } else {
+    team.blockedUntil = undefined;
+    team.remainingBlockedScans = 0;
+    team.blockReason = "";
+    eventBus.publish(DOMAIN_EVENTS.ADMIN_TEAM_UNBLOCKED, { eventId, teamId: team._id });
+  }
+
+  await team.save();
+
+  await AuditLog.create({
+    eventId,
+    adminId: adminTeam._id,
+    adminName: adminTeam.teamName,
+    action: block ? "ADMIN_BLOCK_TEAM" : "ADMIN_UNBLOCK_TEAM",
+    targetType: "Team",
+    targetId: team._id,
+    note: options.reason || "",
+  });
+
+  return team.toSafeJSON();
+}
+
+// --- Offline Synchronization ---
+async function processOfflineSync(eventId, team, operations = []) {
+  const results = [];
+  const event = await eventService.getEventById(eventId);
+
+  for (const op of operations) {
+    try {
+      const { operationId, type, qrId, clueId, rawAnswer, questId, answer } = op;
+      if (!operationId) throw new Error("Missing operationId");
+
+      let resPayload = null;
+      if (type === "QR_SCANNED") {
+        resPayload = await processQRScan(team, qrId, event);
+      } else if (type === "ANSWER_SUBMITTED") {
+        resPayload = await submitAnswer(team, clueId, rawAnswer, event);
+      } else if (type === "SIDE_QUEST_COMPLETED") {
+        resPayload = await completeSideQuest(eventId, team, questId, answer);
+      } else {
+        throw new Error(`Unsupported operation type: ${type}`);
+      }
+
+      results.push({ operationId, status: "ACCEPTED", result: resPayload });
+    } catch (err) {
+      results.push({ operationId: op.operationId, status: "REJECTED", error: err.message });
+    }
+  }
+
+  return results;
+}
+
+module.exports = {
+  processQRScan,
+  submitAnswer,
+  useHint,
+  generateRandomClueAssignments,
+  completeSideQuest,
+  adminAdjustScore,
+  adminToggleBlockTeam,
+  processOfflineSync,
+};

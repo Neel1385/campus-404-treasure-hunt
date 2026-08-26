@@ -11,7 +11,7 @@ function mergeGameResult(result = {}) {
 }
 
 const scan = asyncHandler(async (req, res) => {
-  const event = await eventService.getOrCreateEvent();
+  const event = await eventService.getEventById(req.team.eventId);
   const result = await gameService.processQRScan(req.team, req.body.qrId, event);
   req.app.emit("game-event");
   return success(res, mergeGameResult(result), result.message);
@@ -19,7 +19,7 @@ const scan = asyncHandler(async (req, res) => {
 
 const currentClue = asyncHandler(async (req, res) => {
   const team = await Team.findById(req.team._id);
-  const clue = await Clue.findOne({ clueNumber: team.currentClue, active: true });
+  const clue = await Clue.findOne({ eventId: team.eventId, clueNumber: team.currentClue, active: true });
   if (!clue) {
     return success(res, { clue: null, currentLevel: team.currentLevel }, "No active clue found");
   }
@@ -38,14 +38,14 @@ const currentClue = asyncHandler(async (req, res) => {
 });
 
 const answer = asyncHandler(async (req, res) => {
-  const event = await eventService.getOrCreateEvent();
+  const event = await eventService.getEventById(req.team.eventId);
   const result = await gameService.submitAnswer(req.team, req.body.clueId, req.body.answer, event);
   req.app.emit("game-event");
   return success(res, mergeGameResult(result), result.message);
 });
 
 const hint = asyncHandler(async (req, res) => {
-  const event = await eventService.getOrCreateEvent();
+  const event = await eventService.getEventById(req.team.eventId);
   const result = await gameService.useHint(req.team, req.body.clueId, req.body.hintNumber, event);
   req.app.emit("game-event");
   return success(res, mergeGameResult(result), result.message);
