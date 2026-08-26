@@ -52,20 +52,6 @@ export default function BountyHistory() {
 
   return (
     <div>
-      <div className="topbar">
-        <span className="brand">
-          <Link to="/" style={{ color: "inherit" }}>
-            🏴‍☠️ THE LOST TREASURE
-          </Link>
-        </span>
-        <div className="links">
-          <Link to="/dashboard">Dashboard</Link>
-          <Link to="/scan">Scan QR</Link>
-          <Link to="/map">Level Map</Link>
-          <Link to="/leaderboard">Leaderboard</Link>
-        </div>
-      </div>
-
       <div className="container">
         <div style={{ textAlign: "center", marginBottom: 24 }}>
           <div style={{ fontSize: 48, marginBottom: 8 }}>📜</div>

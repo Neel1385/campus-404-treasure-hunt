@@ -132,10 +132,7 @@ export default function Scan() {
 
   return (
     <div className="container narrow">
-      <p className="brand" style={{ marginTop: 24 }}>
-        <Link to="/" style={{ color: "inherit" }}>🏴‍☠️ THE LOST TREASURE</Link>
-      </p>
-      <h1>🗿 Scan QR Code</h1>
+      <h1 style={{ marginTop: 56 }}>🗿 Scan QR Code</h1>
 
       {busy && !result && (
         <div className="scan-hero">

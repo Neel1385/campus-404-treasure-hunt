@@ -118,22 +118,6 @@ export default function Dashboard() {
 
   return (
     <div>
-      <div className="topbar">
-        <span className="brand">
-          <Link to="/" style={{ color: "inherit" }}>
-            🏴‍☠️ THE LOST TREASURE
-          </Link>
-        </span>
-        <div className="links">
-          <Link to="/scan">Scan QR Code</Link>
-          <Link to="/leaderboard">Leaderboard</Link>
-          <Link to="/map">Level Map</Link>
-          <Link to="/bounty-history">Score History</Link>
-          <button className="btn small ghost" onClick={logout}>
-            Logout
-          </button>
-        </div>
-      </div>
 
       <div className="container">
         {error && <div className="alert error">{error}</div>}

@@ -47,19 +47,6 @@ export default function Home() {
 
   return (
     <>
-      {isLoggedIn && (
-        <div className="topbar">
-          <span className="brand">
-            <Link to="/" style={{ color: "inherit" }}>🏴‍☠️ THE LOST TREASURE</Link>
-          </span>
-          <div className="links">
-            <span className="muted">{team?.teamName}</span>
-            <Link to="/dashboard">Dashboard</Link>
-            <button className="btn small ghost" onClick={logout}>Logout</button>
-          </div>
-        </div>
-      )}
-
       {/* HERO */}
       <div className="hero">
         <div className="brand-flag">🏴‍☠️</div>

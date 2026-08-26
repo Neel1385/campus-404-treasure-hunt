@@ -25,13 +25,7 @@ export default function AdminLogin() {
   };
 
   return (
-    <div className="container narrow">
-      <p className="brand" style={{ marginTop: 24 }}>
-        <Link to="/" style={{ color: "inherit" }}>
-          🏴‍☠️ THE LOST TREASURE
-        </Link>
-      </p>
-
+    <div className="container narrow" style={{ paddingTop: 60 }}>
       <div style={{ textAlign: "center", marginBottom: 24 }}>
         <div style={{ fontSize: 48, marginBottom: 8 }}>⚓</div>
         <h1 style={{ fontFamily: "var(--font-display)", color: "var(--gold)", margin: 0 }}>

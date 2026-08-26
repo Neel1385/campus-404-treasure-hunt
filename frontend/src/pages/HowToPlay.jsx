@@ -33,18 +33,6 @@ export default function HowToPlay() {
 
   return (
     <div>
-      <div className="topbar">
-        <span className="brand">
-          <Link to="/" style={{ color: "inherit" }}>
-            🏴‍☠️ THE LOST TREASURE
-          </Link>
-        </span>
-        <div className="links">
-          <Link to="/dashboard">Dashboard</Link>
-          <Link to="/">Home</Link>
-        </div>
-      </div>
-
       <div className="container">
         <div style={{ textAlign: "center", marginBottom: 32 }}>
           <div style={{ fontSize: 48, marginBottom: 8 }}>🗺️</div>
