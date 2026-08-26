@@ -5,12 +5,12 @@ import { useAuth } from "../auth.jsx";
 
 const STATUS_LABEL = {
   NOT_STARTED: "Not started",
-  ACTIVE: "Sailing",
-  PAUSED: "Anchored",
-  ENDED: "Voyage complete",
+  ACTIVE: "Active",
+  PAUSED: "Paused",
+  ENDED: "Ended",
 };
 
-const ISLAND_ICONS = ["", "🏝️", "🌊", "☁️", "⚔️", "🏰", "🏴‍☠️"];
+const LEVEL_ICONS = ["", "🏝️", "🌊", "☁️", "⚔️", "🏰", "🏴‍☠️"];
 
 function statusPill(status) {
   const map = { ACTIVE: "ok", NOT_STARTED: "warn", PAUSED: "warn", ENDED: "danger" };
@@ -50,7 +50,7 @@ export default function Home() {
       {isLoggedIn && (
         <div className="topbar">
           <span className="brand">
-            <Link to="/" style={{ color: "inherit" }}>🏴‍☠️ CAMPUS 404</Link>
+            <Link to="/" style={{ color: "inherit" }}>🏴‍☠️ THE LOST TREASURE</Link>
           </span>
           <div className="links">
             <span className="muted">{team?.teamName}</span>
@@ -60,26 +60,26 @@ export default function Home() {
         </div>
       )}
 
-      {/* HERO — Grand Line Entrance */}
+      {/* HERO */}
       <div className="hero">
         <div className="brand-flag">🏴‍☠️</div>
-        <h1>CAMPUS 404</h1>
-        <div className="subtitle">The Grand Line Has Arrived</div>
+        <h1>THE LOST TREASURE</h1>
+        <div className="subtitle">The treasure is hidden. The clues are scattered. Your adventure begins now.</div>
         <p className="tagline">
           "The greatest treasure is waiting somewhere on campus."
         </p>
         <div className="row" style={{ justifyContent: "center", marginTop: 20 }}>
           {isLoggedIn ? (
-            <Link to="/dashboard" className="btn">⚓ Enter the Grand Line</Link>
+            <Link to="/dashboard" className="btn">🗺️ Enter the Hunt</Link>
           ) : (
             <>
-              <Link to="/register" className="btn">🏴‍☠️ Register Your Crew</Link>
-              <Link to="/login" className="btn secondary">🧭 Set Sail</Link>
+              <Link to="/register" className="btn">🏴‍☠️ Register Your Team</Link>
+              <Link to="/login" className="btn secondary">🧭 Start</Link>
             </>
           )}
-          <Link to="/leaderboard" className="btn ghost">💰 Bounty Board</Link>
+          <Link to="/leaderboard" className="btn ghost">💰 Leaderboard</Link>
           {isLoggedIn && (
-            <Link to="/scan" className="btn ghost">🗿 Scan Poneglyph</Link>
+            <Link to="/scan" className="btn ghost">🗿 Scan QR Code</Link>
           )}
         </div>
       </div>
@@ -102,15 +102,15 @@ export default function Home() {
           <div className="card animate-fade-in">
             <div className="spread">
               <div>
-                <div className="muted" style={{ fontFamily: "var(--font-heading)", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: 11 }}>Voyage Status</div>
+                <div className="muted" style={{ fontFamily: "var(--font-heading)", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: 11 }}>Hunt Status</div>
                 <div style={{ marginTop: 6 }}>{statusPill(event.status)}</div>
               </div>
               <div>
-                <div className="muted" style={{ fontFamily: "var(--font-heading)", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: 11 }}>Log Pose Timer</div>
+                <div className="muted" style={{ fontFamily: "var(--font-heading)", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: 11 }}>Timer</div>
                 <div className="timer">🧭 {fmtMs(event.remainingMs)}</div>
               </div>
               <div>
-                <div className="muted" style={{ fontFamily: "var(--font-heading)", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: 11 }}>Voyage Duration</div>
+                <div className="muted" style={{ fontFamily: "var(--font-heading)", textTransform: "uppercase", letterSpacing: "0.08em", fontSize: 11 }}>Hunt Duration</div>
                 <div className="mono" style={{ marginTop: 4 }}>{event.duration} min</div>
               </div>
             </div>
@@ -120,13 +120,13 @@ export default function Home() {
         {/* Story section */}
         <div className="story-section">
           <div className="parchment animate-fade-in">
-            <h2>⚓ The Grand Line Has Appeared</h2>
-            <p>Ancient Poneglyphs have been discovered across the campus.</p>
-            <p>Hidden among them are clues leading to the greatest treasure in history.</p>
-            <p>Only the crew capable of following the trail can reach <strong style={{ color: "var(--gold)" }}>Laugh Tale</strong>.</p>
-            <p style={{ fontSize: 16 }}>Gather your crew. Follow the Poneglyphs. Survive the Marine traps. Earn the highest bounty.</p>
+            <h2>⚓ The Hunt Has Begun</h2>
+            <p>Clues have been scattered across campus, hidden in plain sight.</p>
+            <p>Each clue leads you closer to the greatest treasure in history.</p>
+            <p>Only the team capable of following the trail can reach <strong style={{ color: "var(--gold)" }}>the Final Treasure</strong>.</p>
+            <p style={{ fontSize: 16 }}>Gather your team. Follow the clues. Avoid the wrong QR codes. Earn the highest score.</p>
             <p>And discover...</p>
-            <div className="one-piece-text">🏴‍☠️ THE ONE PIECE</div>
+            <div className="one-piece-text">🏴‍☠️ THE FINAL TREASURE</div>
             {!isLoggedIn && (
               <Link to="/register" className="btn" style={{ marginTop: 20 }}>
                 ⚔️ Start the Adventure
@@ -135,14 +135,14 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Bounty Board preview */}
+        {/* Leaderboard preview */}
         <h3 style={{ fontFamily: "var(--font-heading)", color: "var(--gold)", letterSpacing: "0.05em" }}>
-          🏴‍☠️ Bounty Board
+          🏴‍☠️ Leaderboard
         </h3>
         {board.length === 0 ? (
           <div className="card muted" style={{ textAlign: "center", padding: 32 }}>
             <div style={{ fontSize: 48, marginBottom: 8 }}>💰</div>
-            No pirate crews have set sail yet. Be the first to earn bounty.
+            No teams have started yet. Be the first to earn points.
           </div>
         ) : (
           <div className="card">
@@ -150,10 +150,10 @@ export default function Home() {
               <thead>
                 <tr>
                   <th>#</th>
-                  <th>Crew</th>
-                  <th>Island</th>
+                  <th>Team</th>
+                  <th>Level</th>
                   <th>Progress</th>
-                  <th>Bounty</th>
+                  <th>Points</th>
                 </tr>
               </thead>
               <tbody>
@@ -166,7 +166,7 @@ export default function Home() {
                       <strong>{t.teamName}</strong>{" "}
                       <span className="muted mono" style={{ fontSize: 12 }}>({t.teamId})</span>
                     </td>
-                    <td className="mono">{ISLAND_ICONS[t.currentLevel || 1]} Lvl {t.currentLevel || 1}</td>
+                    <td className="mono">{LEVEL_ICONS[t.currentLevel || 1]} Lvl {t.currentLevel || 1}</td>
                     <td className="muted">{t.progress} solved</td>
                     <td className="mono" style={{ color: "var(--gold)" }}>💰 {t.points}</td>
                   </tr>
@@ -177,7 +177,7 @@ export default function Home() {
         )}
 
         <p className="muted" style={{ textAlign: "center", marginTop: 32, fontFamily: "var(--font-heading)" }}>
-          Game Master? <Link to="/admin/login">⚓ Marine Headquarters</Link>
+          Game Master? <Link to="/admin/login">⚓ Admin Panel</Link>
         </p>
       </div>
     </>

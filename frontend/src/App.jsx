@@ -8,15 +8,16 @@ import Dashboard from "./pages/Dashboard.jsx";
 import Leaderboard from "./pages/Leaderboard.jsx";
 import AdminLogin from "./pages/AdminLogin.jsx";
 import Admin from "./pages/Admin.jsx";
-import GrandLineMap from "./pages/GrandLineMap.jsx";
-import BountyHistory from "./pages/BountyHistory.jsx";
+import LevelMap from "./pages/GrandLineMap.jsx";
+import ScoreHistory from "./pages/BountyHistory.jsx";
+import HowToPlay from "./pages/HowToPlay.jsx";
 
 // Lazy-loaded: html5-qrcode is heavy, so the camera scanner bundle is only
 // downloaded when a player actually opens the scan page.
 const Scan = lazy(() => import("./pages/Scan.jsx"));
 
 function Lazy({ children }) {
-  return <Suspense fallback={<div className="container narrow"><p className="muted" style={{ textAlign: "center", marginTop: 40 }}>Loading…</p></div>}>{children}</Suspense>;
+  return <Suspense fallback={<div className="container narrow"><p className="muted" style={{ textAlign: "center", marginTop: 40 }}>Loading the treasure map...</p></div>}>{children}</Suspense>;
 }
 
 function RequirePlayer({ children }) {
@@ -56,10 +57,10 @@ export default function App() {
       <Route path="/admin/login" element={<AdminLogin />} />
       <Route path="/admin" element={<Admin />} />
       <Route path="/map" element={
-        <RequirePlayer><GrandLineMap /></RequirePlayer>
+        <RequirePlayer><LevelMap /></RequirePlayer>
       } />
       <Route path="/bounty-history" element={
-        <RequirePlayer><BountyHistory /></RequirePlayer>
+        <RequirePlayer><ScoreHistory /></RequirePlayer>
       } />
       <Route
         path="/dashboard"
@@ -69,6 +70,7 @@ export default function App() {
           </RequirePlayer>
         }
       />
+      <Route path="/how-to-play" element={<HowToPlay />} />
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   );

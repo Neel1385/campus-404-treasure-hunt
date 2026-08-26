@@ -133,30 +133,30 @@ export default function Scan() {
   return (
     <div className="container narrow">
       <p className="brand" style={{ marginTop: 24 }}>
-        <Link to="/" style={{ color: "inherit" }}>🏴‍☠️ CAMPUS 404</Link>
+        <Link to="/" style={{ color: "inherit" }}>🏴‍☠️ THE LOST TREASURE</Link>
       </p>
-      <h1>🗿 Scan Poneglyph</h1>
+      <h1>🗿 Scan QR Code</h1>
 
       {busy && !result && (
         <div className="scan-hero">
-          <h2>🗿 Decoding Poneglyph...</h2>
+          <h2>🗿 Scanning QR Code...</h2>
         </div>
       )}
 
       {showWarning && !result && !error && !busy && (
         <div className="scan-hero">
           <div className="icon">⚓</div>
-          <h2 style={{ color: "var(--warn)" }}>LOG POSE WARNING</h2>
-          <p>You must scan the Poneglyph for your <strong>current island</strong>.</p>
-          <p style={{ color: "var(--danger)" }}>Scanning a wrong Poneglyph will trigger a Marine Trap and deduct bounty.</p>
+          <h2 style={{ color: "var(--warn)" }}>TIMER WARNING</h2>
+          <p>You must scan the QR Code for your <strong>current level</strong>.</p>
+          <p style={{ color: "var(--danger)" }}>Scanning a wrong QR Code will result in a penalty.</p>
           <div className="stat-grid" style={{ maxWidth: 320, margin: "16px auto" }}>
             <div className="stat">
               <div className="num">{currentLevel}</div>
-              <div className="lbl">Current Island</div>
+              <div className="lbl">Current Level</div>
             </div>
             <div className="stat">
               <div className="num">{currentPoints}</div>
-              <div className="lbl">Current Bounty</div>
+              <div className="lbl">Current Points</div>
             </div>
           </div>
           <button className="btn" style={{ marginTop: 16 }} onClick={() => setShowWarning(false)}>
@@ -168,7 +168,7 @@ export default function Scan() {
       {!showWarning && !result && !busy && (
         <div className="row" style={{ justifyContent: "center", marginBottom: 16 }}>
           <button className={`btn ${camMode ? "secondary" : ""}`} onClick={camMode ? stopCamera : startCamera} disabled={busy}>
-            {camMode ? "■ Stop camera" : "🗿 Scan Poneglyph"}
+            {camMode ? "■ Stop camera" : "🗿 Scan QR Code"}
           </button>
           <button className={`btn ${!camMode ? "secondary" : ""}`} onClick={stopCamera}>
             ⌨️ Enter Code
@@ -183,7 +183,7 @@ export default function Scan() {
         <div className="scan-hero">
           <div className="qr-reader" id="qr-reader" />
           <p className="muted" style={{ fontSize: 13, marginTop: 10 }}>
-            Point your camera at a Poneglyph...
+            Point your camera at a QR Code...
           </p>
         </div>
       )}
@@ -191,7 +191,7 @@ export default function Scan() {
       {!result && !showWarning && !camMode && !busy && (
         <div className="scan-hero">
           <div className="icon">⌨️</div>
-          <h2>Enter the Poneglyph code</h2>
+          <h2>Enter the QR Code manually</h2>
           <p className="muted">Scanned by another app? Paste the code shown below the QR.</p>
           <form onSubmit={submit} className="row" style={{ justifyContent: "center", marginTop: 12 }}>
             <input
@@ -210,24 +210,25 @@ export default function Scan() {
           {result.correct && !result.bonus && !result.trap && !result.hintQR && !result.checkpoint && (
             <>
               <div className="icon">🗿</div>
-              <h2 style={{ color: "var(--accent)" }}>PONEGLYPH DISCOVERED!</h2>
+              <h2 style={{ color: "var(--accent)" }}>CORRECT QR CODE!</h2>
+              <p>Great job! You found the correct clue.</p>
               <div className="stat-grid" style={{ maxWidth: 320, margin: "12px auto" }}>
                 <div className="stat">
                   <div className="num">{result.currentLevel || "?"}</div>
-                  <div className="lbl">Island</div>
+                  <div className="lbl">Level</div>
                 </div>
                 <div className="stat">
                   <div className="num" style={{ color: "var(--accent)" }}>+{result.pointsEarned ?? 0}</div>
-                  <div className="lbl">Bounty Earned</div>
+                  <div className="lbl">Points Earned</div>
                 </div>
                 <div className="stat">
                   <div className="num">{result.totalPoints ?? "?"}</div>
-                  <div className="lbl">Total Bounty</div>
+                  <div className="lbl">Total Points</div>
                 </div>
               </div>
               {result.clue && (
                 <div className="card" style={{ textAlign: "left", background: "var(--bg-2)" }}>
-                  <span className="pill info">🗿 Poneglyph {result.clue.clueNumber}</span>
+                  <span className="pill info">🗿 Clue {result.clue.clueNumber}</span>
                   <h3 style={{ margin: "8px 0 4px" }}>{result.clue.title}</h3>
                   <p className="muted" style={{ margin: "0 0 6px" }}>
                     {result.clue.checkpointName} · {result.clue.points} pts
@@ -235,53 +236,53 @@ export default function Scan() {
                   <p style={{ margin: 0 }}>{result.clue.description}</p>
                 </div>
               )}
-              <Link to="/dashboard" className="btn" style={{ marginTop: 8 }}>Read the Message</Link>
+              <Link to="/dashboard" className="btn" style={{ marginTop: 8 }}>Read the Clue</Link>
             </>
           )}
 
           {result.bonus && (
             <>
               <div className="icon">🍎</div>
-              <h2 style={{ color: "var(--accent)" }}>DEVIL FRUIT CHALLENGE!</h2>
+              <h2 style={{ color: "var(--accent)" }}>BONUS QR CODE!</h2>
               <p>{result.message}</p>
-              <p className="muted mono">Bounty: {result.totalPoints}</p>
-              <Link to="/dashboard" className="btn" style={{ marginTop: 8 }}>Return to Grand Line</Link>
+              <p className="muted mono">Points: {result.totalPoints}</p>
+              <Link to="/dashboard" className="btn" style={{ marginTop: 8 }}>Back to Dashboard</Link>
             </>
           )}
 
           {result.trap && (
             <>
               <div className="icon">⚓</div>
-              <h2 style={{ color: "var(--danger)" }}>MARINE TRAP!</h2>
-              <p>{result.message}</p>
-              <p className="muted mono">Bounty: {result.totalPoints}</p>
-              <Link to="/dashboard" className="btn" style={{ marginTop: 8 }}>Return to Grand Line</Link>
+              <h2 style={{ color: "var(--danger)" }}>WRONG QR CODE!</h2>
+              <p>This QR Code belongs to another level.</p>
+              <p className="muted mono">Points: {result.totalPoints}</p>
+              <Link to="/dashboard" className="btn" style={{ marginTop: 8 }}>Back to Dashboard</Link>
             </>
           )}
 
           {result.hintQR && (
             <>
               <div className="icon">💡</div>
-              <h2>Den Den Mushi Hint</h2>
+              <h2>HINT UNLOCKED</h2>
               <p>{result.hint}</p>
-              <Link to="/dashboard" className="btn" style={{ marginTop: 8 }}>Return to Grand Line</Link>
+              <Link to="/dashboard" className="btn" style={{ marginTop: 8 }}>Back to Dashboard</Link>
             </>
           )}
 
           {result.checkpoint && (
             <>
               <div className="icon">📍</div>
-              <h2 style={{ color: "var(--accent)" }}>Island Checkpoint Confirmed</h2>
+              <h2 style={{ color: "var(--accent)" }}>Level Checkpoint Confirmed</h2>
               <p>{result.message}</p>
-              <Link to="/dashboard" className="btn" style={{ marginTop: 8 }}>Return to Grand Line</Link>
+              <Link to="/dashboard" className="btn" style={{ marginTop: 8 }}>Back to Dashboard</Link>
             </>
           )}
 
           {!result.correct && !result.bonus && !result.trap && !result.hintQR && !result.checkpoint && !result.already && (
             <>
               <div className="icon">⚓</div>
-              <h2 style={{ color: "var(--danger)" }}>MARINE TRAP!</h2>
-              <p>This Poneglyph does not resonate with your Log Pose.</p>
+              <h2 style={{ color: "var(--danger)" }}>WRONG QR CODE!</h2>
+              <p>This QR Code is not for your current level.</p>
               <div className="stat-grid" style={{ maxWidth: 320, margin: "12px auto" }}>
                 {result.pointsLost != null && result.pointsLost > 0 && (
                   <div className="stat" style={{ borderColor: "rgba(255,77,109,0.4)" }}>
@@ -292,20 +293,20 @@ export default function Scan() {
                 {result.previousScore != null && (
                   <div className="stat">
                     <div className="num">{result.previousScore}</div>
-                    <div className="lbl">Previous Bounty</div>
+                    <div className="lbl">Previous Points</div>
                   </div>
                 )}
                 <div className="stat">
                   <div className="num">{result.totalPoints ?? "?"}</div>
-                  <div className="lbl">Current Bounty</div>
+                  <div className="lbl">Current Points</div>
                 </div>
                 <div className="stat">
                   <div className="num">{result.currentLevel || "?"}</div>
-                  <div className="lbl">Current Island</div>
+                  <div className="lbl">Current Level</div>
                 </div>
               </div>
               <div className="row" style={{ justifyContent: "center", marginTop: 8 }}>
-                <Link to="/dashboard" className="btn secondary">Return to Grand Line</Link>
+                <Link to="/dashboard" className="btn secondary">Back to Dashboard</Link>
                 <button className="btn" onClick={() => { setResult(null); setManual(""); setShowWarning(true); }}>
                   Scan Again
                 </button>
@@ -316,9 +317,9 @@ export default function Scan() {
           {result.already && (
             <>
               <div className="icon">🗿</div>
-              <h2>Poneglyph Already Discovered</h2>
+              <h2>Already Scanned</h2>
               <p>{result.message}</p>
-              <Link to="/dashboard" className="btn" style={{ marginTop: 8 }}>Return to Grand Line</Link>
+              <Link to="/dashboard" className="btn" style={{ marginTop: 8 }}>Back to Dashboard</Link>
             </>
           )}
         </div>

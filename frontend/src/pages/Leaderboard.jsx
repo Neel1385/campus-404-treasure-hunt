@@ -26,7 +26,7 @@ export default function Leaderboard() {
     api
       .get("/leaderboard")
       .then((data) => setBoard(data.leaderboard || []))
-      .catch(() => setError("Could not load the Bounty Board."));
+      .catch(() => setError("Could not load the leaderboard."));
   }, []);
 
   return (
@@ -34,13 +34,13 @@ export default function Leaderboard() {
       <div className="topbar">
         <span className="brand">
           <Link to="/" style={{ color: "inherit" }}>
-            🏴‍☠️ CAMPUS 404
+            🏴‍☠️ THE LOST TREASURE
           </Link>
         </span>
         <div className="links">
           <Link to="/dashboard">Dashboard</Link>
-          <Link to="/scan">Scan Poneglyph</Link>
-          <Link to="/map">Grand Line Map</Link>
+          <Link to="/scan">Scan QR</Link>
+          <Link to="/map">Level Map</Link>
         </div>
       </div>
 
@@ -48,10 +48,10 @@ export default function Leaderboard() {
         <div style={{ textAlign: "center", marginBottom: 24 }}>
           <div style={{ fontSize: 48, marginBottom: 8 }}>💰</div>
           <h1 style={{ fontFamily: "var(--font-display)", color: "var(--gold)", margin: 0 }}>
-            Bounty Board
+            LEADERBOARD
           </h1>
           <p className="muted" style={{ fontFamily: "var(--font-parchment)", fontStyle: "italic", fontSize: 16 }}>
-            The most wanted pirate crews on the Grand Line
+            The top treasure hunters on the leaderboard
           </p>
         </div>
 
@@ -60,10 +60,9 @@ export default function Leaderboard() {
         {board.length === 0 ? (
           <div className="card muted" style={{ textAlign: "center", padding: 48 }}>
             <div style={{ fontSize: 64, marginBottom: 12 }}>⚓</div>
-            <h3>No crews have set sail yet</h3>
-            <p>Be the first to earn bounty on the Grand Line.</p>
+            <h3>No teams have started yet. Be the first!</h3>
             <Link to="/register" className="btn" style={{ marginTop: 12 }}>
-              🏴‍☠️ Register Your Crew
+              🏴‍☠️ Register Your Team
             </Link>
           </div>
         ) : (
@@ -72,11 +71,11 @@ export default function Leaderboard() {
               <thead>
                 <tr>
                   <th>Rank</th>
-                  <th>Crew</th>
-                  <th>Island</th>
-                  <th>Poneglyphs</th>
+                  <th>Team</th>
+                  <th>Level</th>
+                  <th>Clues Solved</th>
                   <th>Time</th>
-                  <th>Bounty</th>
+                  <th>Points</th>
                 </tr>
               </thead>
               <tbody>
@@ -90,7 +89,7 @@ export default function Leaderboard() {
                       </span>
                       {t.completed && (
                         <span className="pill ok" style={{ marginLeft: 6 }}>
-                          🏴‍☠️ Found One Piece
+                          🏴‍☠️ Found Final Treasure
                         </span>
                       )}
                     </td>
@@ -110,7 +109,7 @@ export default function Leaderboard() {
         )}
 
         <p className="muted" style={{ textAlign: "center", marginTop: 24, fontFamily: "var(--font-heading)" }}>
-          <Link to="/dashboard">← Return to the Grand Line</Link>
+          <Link to="/dashboard">← Return to the Dashboard</Link>
         </p>
       </div>
     </div>

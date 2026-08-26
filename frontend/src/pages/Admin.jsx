@@ -35,10 +35,10 @@ export default function Admin() {
       <div className="topbar">
         <span className="brand">
           <Link to="/" style={{ color: "inherit" }}>
-            🏴‍☠️ CAMPUS 404
+            🏴‍☠️ THE LOST TREASURE
           </Link>{" "}
           <span className="muted" style={{ fontWeight: 400, fontFamily: "var(--font-heading)" }}>
-            / Marine Headquarters
+            / Admin Panel
           </span>
         </span>
         <div className="links">
@@ -61,11 +61,11 @@ export default function Admin() {
 
         <div className="tabs">
           {[
-            ["overview", "⚓ HQ Overview"],
-            ["teams", "🏴‍☠️ Crews"],
-            ["clues", "📜 Poneglyphs"],
-            ["qrs", "🗺️ Road Map"],
-            ["audit", "📋 War Log"],
+            ["overview", "⚓ Overview"],
+            ["teams", "🏴‍☠️ Teams"],
+            ["clues", "📜 Clues"],
+            ["qrs", "🗺️ QR Codes"],
+            ["audit", "📋 Activity Log"],
           ].map(([key, label]) => (
             <button key={key} className={`tab ${tab === key ? "active" : ""}`} onClick={() => setTab(key)}>
               {label}
@@ -108,9 +108,9 @@ function Overview({ token, run, flash }) {
   };
 
   const resetEvent = async () => {
-    if (!window.confirm("Reset ALL crew progress, scores, scans and logs? This cannot be undone.")) return;
+    if (!window.confirm("Reset ALL team progress, scores, scans and logs? This cannot be undone.")) return;
     await run(() => api.post("/admin/event/reset", {}, { token }));
-    flash("Event reset — all crews sent back to the East Blue.");
+    flash("Event reset — all teams reset to Level 1");
     load().catch(() => {});
   };
 
@@ -125,7 +125,7 @@ function Overview({ token, run, flash }) {
       if (patch[k] !== undefined) patch[k] = Number(patch[k]);
     }
     await run(() => api.put("/admin/event/settings", patch, { token }));
-    flash("Voyage settings saved.");
+    flash("Event settings saved.");
     load().catch(() => {});
   };
 
@@ -149,7 +149,7 @@ function Overview({ token, run, flash }) {
       <div className="card">
         <div className="spread">
           <h3 style={{ margin: 0, fontFamily: "var(--font-heading)", color: "var(--gold)" }}>
-            ⚓ Voyage Control
+            ⚓ Event Control
           </h3>
           <span className={`pill ${effectiveStatus === "ACTIVE" ? "ok" : effectiveStatus === "ENDED" ? "danger" : "warn"}`}>
             {STATUS_LABEL[effectiveStatus] || "—"}
@@ -160,40 +160,40 @@ function Overview({ token, run, flash }) {
         </p>
         <div className="row">
           <button className="btn" onClick={() => setStatus("ACTIVE")}>
-            ⚓ {effectiveStatus === "ENDED" ? "Restart Voyage" : effectiveStatus === "NOT_STARTED" ? "Start Voyage" : "Resume Voyage"}
+            ⚓ {effectiveStatus === "ENDED" ? "Restart Event" : effectiveStatus === "NOT_STARTED" ? "Start Event" : "Resume Event"}
           </button>
           {effectiveStatus === "ACTIVE" && (
             <button className="btn secondary" onClick={() => setStatus("PAUSED")}>
-              ⏸ Anchor (Pause)
+              ⏸ Pause Event
             </button>
           )}
           {effectiveStatus === "ACTIVE" && (
             <button className="btn danger" onClick={() => setStatus("ENDED")}>
-              🏴‍☠️ End Voyage
+              🏴‍☠️ End Event
             </button>
           )}
           <button className="btn ghost danger" onClick={resetEvent}>
-            💀 Reset All Progress
+            💀 Restart Event
           </button>
         </div>
       </div>
 
       {stats && (
         <div className="card">
-          <h3 style={{ fontFamily: "var(--font-heading)", color: "var(--gold)" }}>📊 Fleet Intel</h3>
+          <h3 style={{ fontFamily: "var(--font-heading)", color: "var(--gold)" }}>📊 Statistics</h3>
           <div className="stat-grid">
             {[
-              ["🏴‍☠️ Crews", stats.totalTeams],
+              ["🏴‍☠️ Teams", stats.totalTeams],
               ["⚓ Active", stats.activeTeams],
               ["✅ Completed", stats.completedTeams],
               ["💀 Disabled", stats.disabledTeams],
-              ["🗿 Poneglyph Scans", stats.totalQRScans],
+              ["🗿 QR Scans", stats.totalQRScans],
               ["✅ Correct", stats.correctScans],
-              ["⚓ Traps", stats.wrongScans],
+              ["⚓ Wrong", stats.wrongScans],
               ["📜 Submissions", stats.totalSubmissions],
               ["🗺️ Clues", stats.totalClues],
-              ["💰 Total Bounty", stats.totalPointsAwarded],
-              ["📊 Avg Bounty", stats.averageScore],
+              ["💰 Total Points", stats.totalPointsAwarded],
+              ["📊 Average Points", stats.averageScore],
             ].map(([lbl, num]) => (
               <div className="stat" key={lbl}>
                 <div className="num">{num}</div>
@@ -205,7 +205,7 @@ function Overview({ token, run, flash }) {
       )}
 
       <div className="card">
-        <h3 style={{ fontFamily: "var(--font-heading)", color: "var(--gold)" }}>⚙️ Voyage Settings</h3>
+        <h3 style={{ fontFamily: "var(--font-heading)", color: "var(--gold)" }}>⚙️ Event Settings</h3>
         {event && !settingsDraft && (
           <button className="btn secondary small" onClick={() => setSettingsDraft(event.settings || {})}>
             Edit Settings
@@ -217,44 +217,44 @@ function Overview({ token, run, flash }) {
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
               <T label="Event Name" state={settingsDraft.name} set={(v) => setSettingsDraft({ ...settingsDraft, name: v })} />
               <T label="Duration (minutes)" type="number" state={settingsDraft.duration} set={(v) => setSettingsDraft({ ...settingsDraft, duration: v })} />
-              <T label="Max Crew Size" type="number" state={settingsDraft.maxTeamSize} set={(v) => setSettingsDraft({ ...settingsDraft, maxTeamSize: v })} />
+              <T label="Max Team Size" type="number" state={settingsDraft.maxTeamSize} set={(v) => setSettingsDraft({ ...settingsDraft, maxTeamSize: v })} />
               <T label="Max Attempts / Clue" type="number" state={settingsDraft.maxAttemptsPerClue} set={(v) => setSettingsDraft({ ...settingsDraft, maxAttemptsPerClue: v })} />
             </div>
 
-            <h4 style={{ fontFamily: "var(--font-heading)" }}>💰 Bounty System</h4>
+            <h4 style={{ fontFamily: "var(--font-heading)" }}>💰 Points System</h4>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
-              <T label="Correct Poneglyph Bounty" type="number" state={settingsDraft.correctQRPoints} set={(v) => setSettingsDraft({ ...settingsDraft, correctQRPoints: v })} />
+              <T label="Correct QR Points" type="number" state={settingsDraft.correctQRPoints} set={(v) => setSettingsDraft({ ...settingsDraft, correctQRPoints: v })} />
               <T label="Clue Completion Bonus" type="number" state={settingsDraft.clueCompletionPoints} set={(v) => setSettingsDraft({ ...settingsDraft, clueCompletionPoints: v })} />
-              <T label="Marine Trap Penalty" type="number" state={settingsDraft.wrongScanPenalty} set={(v) => setSettingsDraft({ ...settingsDraft, wrongScanPenalty: v })} />
+              <T label="Wrong QR Penalty" type="number" state={settingsDraft.wrongScanPenalty} set={(v) => setSettingsDraft({ ...settingsDraft, wrongScanPenalty: v })} />
               <T label="Wrong Answer Penalty" type="number" state={settingsDraft.wrongAnswerPenalty} set={(v) => setSettingsDraft({ ...settingsDraft, wrongAnswerPenalty: v })} />
-              <T label="Den Den Mushi Hint 1 Cost" type="number" state={settingsDraft.hint1Penalty} set={(v) => setSettingsDraft({ ...settingsDraft, hint1Penalty: v })} />
-              <T label="Den Den Mushi Hint 2 Cost" type="number" state={settingsDraft.hint2Penalty} set={(v) => setSettingsDraft({ ...settingsDraft, hint2Penalty: v })} />
-              <T label="Laugh Tale Bounty" type="number" state={settingsDraft.finalChallengePoints} set={(v) => setSettingsDraft({ ...settingsDraft, finalChallengePoints: v })} />
+              <T label="Hint 1 Cost" type="number" state={settingsDraft.hint1Penalty} set={(v) => setSettingsDraft({ ...settingsDraft, hint1Penalty: v })} />
+              <T label="Hint 2 Cost" type="number" state={settingsDraft.hint2Penalty} set={(v) => setSettingsDraft({ ...settingsDraft, hint2Penalty: v })} />
+              <T label="Final Treasure Points" type="number" state={settingsDraft.finalChallengePoints} set={(v) => setSettingsDraft({ ...settingsDraft, finalChallengePoints: v })} />
             </div>
 
             <h4 style={{ fontFamily: "var(--font-heading)" }}>⚡ Speed Bonus</h4>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
               <T label="Max Speed Bonus" type="number" state={settingsDraft.speedBonusMax} set={(v) => setSettingsDraft({ ...settingsDraft, speedBonusMax: v })} />
               <T label="Tier 1: within (sec)" type="number" state={settingsDraft.speedBonusT1} set={(v) => setSettingsDraft({ ...settingsDraft, speedBonusT1: v })} />
-              <T label="Tier 1: bounty" type="number" state={settingsDraft.speedBonusP1} set={(v) => setSettingsDraft({ ...settingsDraft, speedBonusP1: v })} />
+              <T label="Tier 1: points" type="number" state={settingsDraft.speedBonusP1} set={(v) => setSettingsDraft({ ...settingsDraft, speedBonusP1: v })} />
               <T label="Tier 2: within (sec)" type="number" state={settingsDraft.speedBonusT2} set={(v) => setSettingsDraft({ ...settingsDraft, speedBonusT2: v })} />
-              <T label="Tier 2: bounty" type="number" state={settingsDraft.speedBonusP2} set={(v) => setSettingsDraft({ ...settingsDraft, speedBonusP2: v })} />
+              <T label="Tier 2: points" type="number" state={settingsDraft.speedBonusP2} set={(v) => setSettingsDraft({ ...settingsDraft, speedBonusP2: v })} />
               <T label="Tier 3: within (sec)" type="number" state={settingsDraft.speedBonusT3} set={(v) => setSettingsDraft({ ...settingsDraft, speedBonusT3: v })} />
-              <T label="Tier 3: bounty" type="number" state={settingsDraft.speedBonusP3} set={(v) => setSettingsDraft({ ...settingsDraft, speedBonusP3: v })} />
+              <T label="Tier 3: points" type="number" state={settingsDraft.speedBonusP3} set={(v) => setSettingsDraft({ ...settingsDraft, speedBonusP3: v })} />
             </div>
 
             <h4 style={{ fontFamily: "var(--font-heading)" }}>🔧 Toggles</h4>
             <div className="row" style={{ flexWrap: "wrap" }}>
-              <B label="Marine Trap penalties" state={settingsDraft.wrongScanPenaltyEnabled} set={(v) => setSettingsDraft({ ...settingsDraft, wrongScanPenaltyEnabled: v })} />
+              <B label="Wrong QR penalties" state={settingsDraft.wrongScanPenaltyEnabled} set={(v) => setSettingsDraft({ ...settingsDraft, wrongScanPenaltyEnabled: v })} />
               <B label="Wrong answer penalties" state={settingsDraft.wrongAnswerPenaltyEnabled} set={(v) => setSettingsDraft({ ...settingsDraft, wrongAnswerPenaltyEnabled: v })} />
-              <B label="Speed bonus enabled" state={settingsDraft.speedBonusEnabled} set={(v) => setSettingsDraft({ ...settingsDraft, speedBonusEnabled: v })} />
-              <B label="Lock after max traps" state={settingsDraft.lockAfterMaxWrongScans} set={(v) => setSettingsDraft({ ...settingsDraft, lockAfterMaxWrongScans: v })} />
-              <B label="Allow negative bounty" state={settingsDraft.allowNegativeScore} set={(v) => setSettingsDraft({ ...settingsDraft, allowNegativeScore: v })} />
-              <B label="Devil Fruit QRs" state={settingsDraft.bonusQREnabled} set={(v) => setSettingsDraft({ ...settingsDraft, bonusQREnabled: v })} />
-              <B label="Marine Trap QRs" state={settingsDraft.trapQREnabled} set={(v) => setSettingsDraft({ ...settingsDraft, trapQREnabled: v })} />
-              <B label="Den Den Mushi QRs" state={settingsDraft.hintQREnabled} set={(v) => setSettingsDraft({ ...settingsDraft, hintQREnabled: v })} />
+              <B label="Speed bonus" state={settingsDraft.speedBonusEnabled} set={(v) => setSettingsDraft({ ...settingsDraft, speedBonusEnabled: v })} />
+              <B label="Lock after max wrong scans" state={settingsDraft.lockAfterMaxWrongScans} set={(v) => setSettingsDraft({ ...settingsDraft, lockAfterMaxWrongScans: v })} />
+              <B label="Allow negative points" state={settingsDraft.allowNegativeScore} set={(v) => setSettingsDraft({ ...settingsDraft, allowNegativeScore: v })} />
+              <B label="Bonus QRs" state={settingsDraft.bonusQREnabled} set={(v) => setSettingsDraft({ ...settingsDraft, bonusQREnabled: v })} />
+              <B label="Wrong QRs" state={settingsDraft.trapQREnabled} set={(v) => setSettingsDraft({ ...settingsDraft, trapQREnabled: v })} />
+              <B label="Hint QRs" state={settingsDraft.hintQREnabled} set={(v) => setSettingsDraft({ ...settingsDraft, hintQREnabled: v })} />
               <B label="Checkpoint QRs" state={settingsDraft.checkpointQREnabled} set={(v) => setSettingsDraft({ ...settingsDraft, checkpointQREnabled: v })} />
-              <B label="Bounty Board visible" state={settingsDraft.leaderboardVisible} set={(v) => setSettingsDraft({ ...settingsDraft, leaderboardVisible: v })} />
+              <B label="Leaderboard visible" state={settingsDraft.leaderboardVisible} set={(v) => setSettingsDraft({ ...settingsDraft, leaderboardVisible: v })} />
             </div>
             <div className="row" style={{ marginTop: 12 }}>
               <button className="btn" type="submit">
@@ -298,7 +298,7 @@ function Teams({ token, run, flash }) {
     <div className="card">
       <div className="spread" style={{ marginBottom: 12 }}>
         <h3 style={{ margin: 0, fontFamily: "var(--font-heading)", color: "var(--gold)" }}>
-          🏴‍☠️ Crews ({teams.length})
+          🏴‍☠️ Teams ({teams.length})
         </h3>
         <input
           style={{ maxWidth: 240 }}
@@ -308,15 +308,15 @@ function Teams({ token, run, flash }) {
         />
       </div>
 
-      {filtered.length === 0 && <p className="muted">No crews match.</p>}
+      {filtered.length === 0 && <p className="muted">No teams match.</p>}
       {filtered.map((t) => (
         <div key={t._id} className="card" style={{ background: "var(--bg-2)", padding: 14 }}>
           <div className="spread">
             <div>
               <strong>{t.teamName}</strong> <span className="muted mono">{t.teamId}</span>
               <div className="muted" style={{ fontSize: 13 }}>
-                Bounty <b className="mono" style={{ color: "var(--gold)" }}>{t.points}</b> · Island {t.currentLevel || t.currentClue || 1} · Poneglyph {t.currentClue} ·{" "}
-                {t.solvedClues?.length} decoded · {t.wrongScans} traps
+                Points <b className="mono" style={{ color: "var(--gold)" }}>{t.points}</b> · Level {t.currentLevel || t.currentClue || 1} · Clue {t.currentClue} ·{" "}
+                {t.solvedClues?.length} solved · {t.wrongScans} wrong QRs
               </div>
               <span className={`pill ${t.status === "active" ? "ok" : t.status === "completed" ? "info" : "danger"}`}>
                 {t.status}
@@ -334,7 +334,7 @@ function Teams({ token, run, flash }) {
                 className="btn small"
                 onClick={async () => {
                   await run(() => api.put(`/admin/teams/${t._id}/points`, { delta: Number(pointsMap[t._id] || 0) }, { token }));
-                  flash("Bounty updated");
+                  flash("Points updated");
                   refresh();
                 }}
               >
@@ -350,7 +350,7 @@ function Teams({ token, run, flash }) {
                 className="btn small secondary"
                 onClick={async () => {
                   await run(() => api.put(`/admin/teams/${t._id}/unlock-clue`, { clueNumber: Number(unlockMap[t._id]) || 1 }, { token }));
-                  flash("Poneglyph unlocked");
+                  flash("Clue unlocked");
                   refresh();
                 }}
               >
@@ -360,7 +360,7 @@ function Teams({ token, run, flash }) {
                 className="btn small secondary"
                 onClick={async () => {
                   await run(() => api.patch(`/admin/teams/${t._id}/status`, {}, { token }));
-                  flash("Crew status toggled");
+                  flash("Team status toggled");
                   refresh();
                 }}
               >
@@ -371,7 +371,7 @@ function Teams({ token, run, flash }) {
                 onClick={async () => {
                   if (!window.confirm(`Reset progress for ${t.teamName}?`)) return;
                   await run(() => api.post(`/admin/teams/${t._id}/reset`, {}, { token }));
-                  flash("Crew reset — sent back to East Blue");
+                  flash("Team reset — sent back to Level 1");
                   refresh();
                 }}
               >
@@ -442,16 +442,16 @@ function Clues({ token, run, flash }) {
         { token }
       )
     );
-    flash("Poneglyph message created");
+    flash("Clue created");
     setShowForm(false);
     setForm({ ...form, clueNumber: "", title: "", description: "", checkpointName: "", correctAnswer: "" });
     load().catch(() => {});
   };
 
   const remove = async (clue) => {
-    if (!window.confirm(`Delete Poneglyph #${clue.clueNumber} "${clue.title}"? Its Road Map entry will be removed too.`)) return;
+    if (!window.confirm(`Delete Clue #${clue.clueNumber} "${clue.title}"? Its QR code entry will be removed too.`)) return;
     await run(() => api.del(`/admin/clues/${clue._id}`, { token }));
-    flash("Poneglyph deleted");
+    flash("Clue deleted");
     load().catch(() => {});
   };
 
@@ -459,10 +459,10 @@ function Clues({ token, run, flash }) {
     <div className="card">
       <div className="spread" style={{ marginBottom: 12 }}>
         <h3 style={{ margin: 0, fontFamily: "var(--font-heading)", color: "var(--gold)" }}>
-          📜 Poneglyphs ({clues.length})
+          📜 Clues ({clues.length})
         </h3>
         <button className="btn small" onClick={() => setShowForm(!showForm)}>
-          {showForm ? "Close form" : "+ New Poneglyph"}
+          {showForm ? "Close form" : "+ New Clue"}
         </button>
       </div>
 
@@ -470,11 +470,11 @@ function Clues({ token, run, flash }) {
         <form className="card" style={{ background: "var(--bg-2)" }} onSubmit={create}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
             <div className="field">
-              <label>Poneglyph Number</label>
+              <label>Clue Number</label>
               <input type="number" value={form.clueNumber} onChange={set("clueNumber")} required />
             </div>
             <div className="field">
-              <label>Bounty Reward</label>
+              <label>Points Reward</label>
               <input type="number" value={form.points} onChange={set("points")} required />
             </div>
           </div>
@@ -483,7 +483,7 @@ function Clues({ token, run, flash }) {
             <input value={form.title} onChange={set("title")} required />
           </div>
           <div className="field">
-            <label>Island Checkpoint</label>
+            <label>Checkpoint Name</label>
             <input value={form.checkpointName} onChange={set("checkpointName")} required />
           </div>
           <div className="field">
@@ -509,11 +509,11 @@ function Clues({ token, run, flash }) {
             </div>
             <label className="row" style={{ marginBottom: 14 }}>
               <input type="checkbox" checked={form.isFinal} onChange={(e) => setForm({ ...form, isFinal: e.target.checked })} />
-              <span>🏴‍☠️ Final Poneglyph (Laugh Tale)</span>
+              <span>🏴‍☠️ Final Clue (Final Treasure)</span>
             </label>
           </div>
           <button className="btn" type="submit">
-            Create Poneglyph
+            Create Clue
           </button>
         </form>
       )}
@@ -525,7 +525,7 @@ function Clues({ token, run, flash }) {
               <span className={`pill ${c.isFinal ? "danger" : "info"}`}>#{c.clueNumber}</span>{" "}
               <strong>{c.title}</strong>{" "}
               <span className="muted" style={{ fontSize: 13 }}>
-                {c.checkpointName} · {c.points} bounty · {c.difficulty} · {c.maxAttempts} attempts
+                {c.checkpointName} · {c.points} points · {c.difficulty} · {c.maxAttempts} attempts
               </span>
               {!c.active && <span className="pill warn" style={{ marginLeft: 6 }}>inactive</span>}
               <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>{c.description}</div>
@@ -535,7 +535,7 @@ function Clues({ token, run, flash }) {
                 ans: {c.correctAnswer}
               </span>
               <button className="btn small secondary" onClick={remove}>
-                Delete
+                Delete Clue
               </button>
             </div>
           </div>
@@ -568,15 +568,15 @@ function QRCodes({ token, run, flash }) {
   }, [load]);
 
   const generate = async () => {
-    if (!selectedClue) return flash("Select a Poneglyph first");
+    if (!selectedClue) return flash("Select a clue first");
     const res = await run(() => api.post("/admin/qrcodes/generate", { clueId: selectedClue }, { token }));
-    flash(res.message || "Poneglyph QR generated");
+    flash(res.message || "Clue QR generated");
     load().catch(() => {});
   };
 
   const toggle = async (qr) => {
     await run(() => api.patch(`/admin/qrcodes/${qr._id}/toggle`, {}, { token }));
-    flash(`Poneglyph ${qr.qrId} ${qr.active ? "activated" : "deactivated"}`);
+    flash(`Clue QR ${qr.qrId} ${qr.active ? "activated" : "deactivated"}`);
     load().catch(() => {});
   };
 
@@ -590,7 +590,7 @@ function QRCodes({ token, run, flash }) {
     <div className="card">
       <div className="row" style={{ marginBottom: 14 }}>
         <select value={selectedClue} onChange={(e) => setSelectedClue(e.target.value)} style={{ maxWidth: 260 }}>
-          <option value="">— select Poneglyph —</option>
+          <option value="">— select Clue —</option>
           {clues.map((c) => (
             <option key={c._id} value={c._id}>
               #{c.clueNumber} {c.title}
@@ -599,14 +599,14 @@ function QRCodes({ token, run, flash }) {
           ))}
         </select>
         <button className="btn small" onClick={generate}>
-          Generate QR for Poneglyph
+          Generate QR for Clue
         </button>
       </div>
       <p className="muted" style={{ fontSize: 13, marginTop: -8, marginBottom: 12 }}>
-        Poneglyphs marked <span className="mono">(exists)</span> already have a QR code. Pick one marked <span className="mono">(new)</span> to create its QR.
+        Clues marked <span className="mono">(exists)</span> already have a QR code. Pick one marked <span className="mono">(new)</span> to create its QR.
       </p>
 
-      {qrs.length === 0 && <p className="muted">No Poneglyph QR codes yet. Create Poneglyphs first, then generate QRs.</p>}
+      {qrs.length === 0 && <p className="muted">No QR codes yet. Create clues first, then generate QRs.</p>}
       <div className="alert" style={{ margin: "12px 0" }}>
         To generate QR images / a printable sheet, run from the backend directory:
         <code style={{ display: "block", marginTop: 6 }}>
@@ -621,7 +621,7 @@ function QRCodes({ token, run, flash }) {
               <span className={`pill ${qr.active ? "ok" : "warn"}`}>{qr.active ? "active" : "inactive"}</span>{" "}
               <span className="mono" style={{ fontWeight: 700 }}>{qr.qrId}</span>{" "}
               <span className={`pill info`}>{qr.type}</span>{" "}
-              {qr.level > 0 && <span className="pill info">Island {qr.level}</span>}{" "}
+              {qr.level > 0 && <span className="pill info">Level {qr.level}</span>}{" "}
               {qr.clueId && (
                 <span className="muted" style={{ fontSize: 13 }}>
                   #{qr.clueId.clueNumber} {qr.clueId.title}
@@ -656,9 +656,9 @@ function Audit({ token, run }) {
   return (
     <div className="card">
       <h3 style={{ fontFamily: "var(--font-heading)", color: "var(--gold)" }}>
-        📋 War Log ({logs.length})
+        📋 Activity Log ({logs.length})
       </h3>
-      {logs.length === 0 && <p className="muted">No entries in the war log yet.</p>}
+      {logs.length === 0 && <p className="muted">No entries in the activity log yet.</p>}
       <ul className="list">
         {logs.map((l) => (
           <li key={l._id}>

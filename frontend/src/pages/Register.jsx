@@ -27,7 +27,7 @@ export default function Register() {
 
   const addMember = () => {
     if (form.members.length >= 4) {
-      setError("Maximum 4 members per crew (captain + 3).");
+      setError("Maximum 4 members per team (leader + 3).");
       return;
     }
     setForm({ ...form, members: [...form.members, EMPTY_MEMBER] });
@@ -53,7 +53,7 @@ export default function Register() {
         confirmPassword: form.confirmPassword,
         members: form.members.filter((m) => m.fullName || m.collegeId),
       });
-      alert(`🏴‍☠️ CREW "${data.teamName}" CREATED!\nYour Crew ID is ${data.teamId}. Keep it safe!`);
+      alert(`🏴‍☠️ TEAM "${data.teamName}" CREATED!\nYour Team ID is ${data.teamId}. Keep it safe!`);
       navigate("/login", { state: { teamId: data.teamId } });
     } catch (err) {
       setError(err.message);
@@ -65,16 +65,16 @@ export default function Register() {
   return (
     <div className="container narrow">
       <p className="brand" style={{ marginTop: 24 }}>
-        <Link to="/" style={{ color: "inherit" }}>🏴‍☠️ CAMPUS 404</Link>
+        <Link to="/" style={{ color: "inherit" }}>🏴‍☠️ THE LOST TREASURE</Link>
       </p>
 
       <div className="hero" style={{ padding: "24px 0 16px" }}>
         <div style={{ fontSize: 48 }}>🏴‍☠️</div>
         <h1 style={{ fontFamily: "var(--font-display)", fontSize: "clamp(24px, 5vw, 36px)" }}>
-          Create Your Pirate Crew
+          Create Your Team
         </h1>
         <p className="tagline" style={{ margin: "8px 0 0", fontSize: 16 }}>
-          Assemble your crew and set sail on the Grand Line
+          Assemble your team and start the treasure hunt
         </p>
       </div>
 
@@ -82,15 +82,15 @@ export default function Register() {
 
       <form className="card" onSubmit={submit}>
         <div className="field">
-          <label>🏴‍☠️ Crew Name</label>
+          <label>🏴‍☠️ Team Name</label>
           <input value={form.teamName} onChange={set("teamName")} required minLength={2} placeholder="e.g. Straw Hats" />
         </div>
 
         <h3 style={{ marginBottom: 12, fontFamily: "var(--font-heading)", color: "var(--gold)" }}>
-          ⚓ Captain
+          ⚓ Team Leader
         </h3>
         <div className="field">
-          <label>Captain Name</label>
+          <label>Leader Name</label>
           <input value={form.leaderName} onChange={set("leaderName")} required placeholder="Your full name" />
         </div>
         <div className="field">
@@ -103,7 +103,7 @@ export default function Register() {
         </div>
 
         <h3 style={{ marginBottom: 12, fontFamily: "var(--font-heading)", color: "var(--gold)" }}>
-          👥 Crew Members
+          👥 Team Members
         </h3>
         {form.members.map((m, i) => (
           <div key={i} className="card" style={{ padding: 12, background: "rgba(13,15,20,0.6)" }}>
@@ -125,7 +125,7 @@ export default function Register() {
         ))}
         {form.members.length < 4 && (
           <button type="button" className="btn secondary small" onClick={addMember}>
-            + Add Crew Member
+            + Add Team Member
           </button>
         )}
 
@@ -139,12 +139,12 @@ export default function Register() {
         </div>
 
         <button className="btn block" type="submit" disabled={busy}>
-          {busy ? "🗿 Carving your crew into history..." : "🏴‍☠️ Assemble Crew & Set Sail"}
+          {busy ? "🗿 Creating your team..." : "🏴‍☠️ CREATE TEAM & START HUNT"}
         </button>
       </form>
 
       <p className="muted" style={{ textAlign: "center" }}>
-        Already have a crew? <Link to="/login">🧭 Return to port</Link>
+        Already have a team? <Link to="/login">🧭 Login</Link>
       </p>
     </div>
   );

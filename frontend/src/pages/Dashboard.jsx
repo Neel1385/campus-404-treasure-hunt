@@ -19,18 +19,18 @@ function fmtDate(iso) {
 }
 
 const TX_LABELS = {
-  CORRECT_QR: { label: "Poneglyph Found", color: "ok" },
-  CLUE_COMPLETED: { label: "Clue Decoded", color: "ok" },
+  CORRECT_QR: { label: "QR Code Found", color: "ok" },
+  CLUE_COMPLETED: { label: "Clue Solved", color: "ok" },
   SPEED_BONUS: { label: "Speed Bonus", color: "info" },
-  WRONG_QR: { label: "Marine Trap", color: "danger" },
+  WRONG_QR: { label: "Wrong QR", color: "danger" },
   WRONG_ANSWER: { label: "Wrong Answer", color: "danger" },
   HINT_PENALTY: { label: "Hint Used", color: "warn" },
-  BONUS: { label: "Devil Fruit", color: "info" },
-  FINAL_CHALLENGE: { label: "Laugh Tale", color: "ok" },
-  ADMIN_ADJUSTMENT: { label: "Marine Adjustment", color: "info" },
-  TRAP: { label: "Marine Trap", color: "danger" },
+  BONUS: { label: "Bonus QR", color: "info" },
+  FINAL_CHALLENGE: { label: "Final Treasure", color: "ok" },
+  ADMIN_ADJUSTMENT: { label: "Admin Adjustment", color: "info" },
+  TRAP: { label: "Wrong QR", color: "danger" },
   CHECKPOINT: { label: "Checkpoint", color: "info" },
-  ROAD_PONEGLYPH: { label: "Road Poneglyph", color: "ok" },
+  ROAD_PONEGLYPH: { label: "Special QR", color: "ok" },
 };
 
 export default function Dashboard() {
@@ -73,12 +73,12 @@ export default function Dashboard() {
     try {
       const res = await api.post("/game/answer", { clueId: clue.clue.id, answer }, { token });
       if (res.missionComplete) {
-        setNotice(`🏴‍☠️ YOU FOUND THE ONE PIECE! Final Bounty: ${res.totalPoints}`);
+        setNotice(`🏴‍☠️ YOU FOUND THE TREASURE! Final Points: ${res.totalPoints}`);
       } else if (res.levelCompleted) {
         setNotice(
-          `🏝️ ISLAND CONQUERED! Level ${res.levelCompleted} Complete! +${res.pointsEarned} bounty` +
+          `🏝️ LEVEL COMPLETE! Level ${res.levelCompleted} Complete! +${res.pointsEarned} points` +
           (res.speedBonus ? ` (incl. ${res.speedBonus} speed bonus)` : "") +
-          ` → New destination: Island ${res.newLevel}`
+          ` → New destination: Level ${res.newLevel}`
         );
       } else {
         setNotice(res.message);
@@ -100,7 +100,7 @@ export default function Dashboard() {
     setBusy(true);
     try {
       const res = await api.post("/game/hint", { clueId: clue.clue.id, hintNumber }, { token });
-      setNotice(`${res.hint} (-${res.penalty} bounty)`);
+      setNotice(`${res.hint} (-${res.penalty} points)`);
       await load();
     } catch (err) {
       setError(err.message);
@@ -121,14 +121,14 @@ export default function Dashboard() {
       <div className="topbar">
         <span className="brand">
           <Link to="/" style={{ color: "inherit" }}>
-            CAMPUS 404
+            🏴‍☠️ THE LOST TREASURE
           </Link>
         </span>
         <div className="links">
-          <Link to="/scan">Scan Poneglyph</Link>
-          <Link to="/leaderboard">Bounty Board</Link>
-          <Link to="/map">Grand Line Map</Link>
-          <Link to="/bounty-history">Bounty History</Link>
+          <Link to="/scan">Scan QR Code</Link>
+          <Link to="/leaderboard">Leaderboard</Link>
+          <Link to="/map">Level Map</Link>
+          <Link to="/bounty-history">Score History</Link>
           <button className="btn small ghost" onClick={logout}>
             Logout
           </button>
@@ -147,25 +147,25 @@ export default function Dashboard() {
           <div className="stat-grid" style={{ width: "100%", marginTop: 12 }}>
             <div className="stat">
               <div className="num" style={{ color: "#f5a623" }}>{teamData?.points ?? 0}</div>
-              <div className="lbl">💰 Bounty</div>
+              <div className="lbl">💰 Points</div>
             </div>
             <div className="stat">
               <div className="num">{currentLevel}</div>
-              <div className="lbl">🌊 Current Island</div>
+              <div className="lbl">🌊 Current Level</div>
             </div>
             <div className="stat">
               <div className="num">
                 {isComplete ? "✓" : `${teamData?.solvedClues?.length ?? 0} / ${totalLevels}`}
               </div>
-              <div className="lbl">🗿 Poneglyphs Found</div>
+              <div className="lbl">🗿 Clues Completed</div>
             </div>
             <div className="stat">
               <div className="num">#{rank}</div>
-              <div className="lbl">🏆 Bounty Rank</div>
+              <div className="lbl">🏆 Points Earned</div>
             </div>
             <div className="stat">
               <div className="num">{teamData?.wrongScans ?? 0}</div>
-              <div className="lbl">⚓ Marine Traps</div>
+              <div className="lbl">⚓ Wrong QR Scans</div>
             </div>
             <div className="stat">
               <div className="num">{teamData?.hintsUsed?.length ?? 0}</div>
@@ -173,7 +173,7 @@ export default function Dashboard() {
             </div>
             <div className="stat">
               <div className="num">{fmtMs(me?.event?.remainingMs)}</div>
-              <div className="lbl">🧭 Log Pose</div>
+              <div className="lbl">🧭 Timer</div>
             </div>
           </div>
         </div>
@@ -181,29 +181,29 @@ export default function Dashboard() {
         {isComplete ? (
           <div className="card" style={{ textAlign: "center", padding: 40 }}>
             <div style={{ fontSize: 48 }}>🏴‍☠️</div>
-            <h2>YOU FOUND THE ONE PIECE!</h2>
+            <h2>TREASURE FOUND!</h2>
             <p className="muted">
-              Final bounty: <strong className="mono">{teamData.finalScore}</strong> berries
+              Final Points: <strong className="mono">{teamData.finalScore}</strong>
             </p>
             <Link to="/leaderboard" className="btn">
-              View Bounty Board
+              View Leaderboard
             </Link>
           </div>
         ) : clue && clue.clue ? (
           <div className="card">
             <div className="spread">
-              <span className="pill info">Island {clue.currentLevel || clue.clueNumber} · Poneglyph {clue.clueNumber} of {totalLevels}</span>
+              <span className="pill info">Level {clue.currentLevel || clue.clueNumber} · Clue {clue.clueNumber} of {totalLevels}</span>
               {unlocked ? (
                 <span className="pill ok">Deciphered — answer it</span>
               ) : clue.locked ? (
                 <span className="pill danger">🔒 Sealed</span>
               ) : (
-                <span className="pill warn">Scan the Poneglyph to unlock</span>
+                <span className="pill warn">Scan the QR Code to unlock</span>
               )}
             </div>
             <h2 style={{ marginBottom: 4 }}>{clue.clue.title}</h2>
             <p className="muted" style={{ marginTop: 0 }}>
-              <span className="mono">{clue.clue.checkpointName}</span> · {clue.clue.points} bounty ·{" "}
+              <span className="mono">{clue.clue.checkpointName}</span> · {clue.clue.points} points ·{" "}
               {clue.clue.difficulty}
             </p>
             <p>{clue.clue.description}</p>
@@ -213,7 +213,7 @@ export default function Dashboard() {
                 <form className="row" onSubmit={submitAnswer} style={{ marginTop: 8 }}>
                   <input
                     style={{ flex: 1, minWidth: 200 }}
-                    placeholder="Decipher the Poneglyph message..."
+                    placeholder="Decipher the clue message..."
                     value={answer}
                     onChange={(e) => setAnswer(e.target.value)}
                     required
@@ -226,12 +226,12 @@ export default function Dashboard() {
                 {(clue.clue.hints || []).length > 0 && (
                   <div style={{ marginTop: 16 }}>
                     <p className="muted" style={{ marginBottom: 8 }}>
-                      Stuck? Use a Den Den Mushi hint (costs bounty):
+                      Stuck? Use a hint (costs points):
                     </p>
                     <div className="row">
                       {clue.clue.hints.map((h, i) => (
                         <button key={i} className="btn secondary small" onClick={() => useHint(i + 1)} disabled={busy}>
-                          Hint {i + 1} (−{h.penalty} bounty)
+                          Hint {i + 1} (−{h.penalty} points)
                         </button>
                       ))}
                     </div>
@@ -240,25 +240,25 @@ export default function Dashboard() {
               </>
             ) : (
               <p className="muted">
-                Find the Poneglyph posted at <strong>{clue.clue.checkpointName}</strong> and scan it to unlock this clue.
+                Find the QR Code posted at <strong>{clue.clue.checkpointName}</strong> and scan it to unlock this clue.
               </p>
             )}
           </div>
         ) : (
-          <div className="card muted">No active Poneglyphs on the Grand Line right now. Set sail when the voyage begins.</div>
+          <div className="card muted">No active levels right now. Set sail when the hunt begins.</div>
         )}
 
         <div className="card">
-          <h3>Bounty History</h3>
+          <h3>Score History</h3>
           {history.length === 0 ? (
-            <p className="muted">No bounty transactions yet, pirate.</p>
+            <p className="muted">No score transactions yet, pirate.</p>
           ) : (
             <table className="board">
               <thead>
                 <tr>
-                  <th>Island</th>
+                  <th>Level</th>
                   <th>Action</th>
-                  <th>Bounty</th>
+                  <th>Points</th>
                   <th>When</th>
                 </tr>
               </thead>

@@ -28,14 +28,14 @@ export default function AdminLogin() {
     <div className="container narrow">
       <p className="brand" style={{ marginTop: 24 }}>
         <Link to="/" style={{ color: "inherit" }}>
-          🏴‍☠️ CAMPUS 404
+          🏴‍☠️ THE LOST TREASURE
         </Link>
       </p>
 
       <div style={{ textAlign: "center", marginBottom: 24 }}>
         <div style={{ fontSize: 48, marginBottom: 8 }}>⚓</div>
         <h1 style={{ fontFamily: "var(--font-display)", color: "var(--gold)", margin: 0 }}>
-          Marine Headquarters
+          Admin Panel
         </h1>
         <p className="muted" style={{ fontFamily: "var(--font-parchment)", fontStyle: "italic", fontSize: 16 }}>
           Authorized personnel only
@@ -46,18 +46,18 @@ export default function AdminLogin() {
 
       <form className="card" onSubmit={submit}>
         <div className="field">
-          <label>⚓ Admiral Email</label>
+          <label>📧 Admin Email</label>
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
             autoFocus
-            placeholder="marine-hq@navy.mil"
+            placeholder="admin@treasurehunt.com"
           />
         </div>
         <div className="field">
-          <label>🔒 Secret Code</label>
+          <label>🔒 Password</label>
           <input
             type="password"
             value={password}
@@ -67,12 +67,12 @@ export default function AdminLogin() {
           />
         </div>
         <button className="btn block" type="submit" disabled={busy}>
-          {busy ? "⚓ Entering HQ..." : "⚓ Enter Marine Headquarters"}
+          {busy ? "⚓ Entering..." : "⚓ ENTER ADMIN PANEL"}
         </button>
       </form>
 
       <p className="muted" style={{ textAlign: "center" }}>
-        <Link to="/">← Back to the Grand Line</Link>
+        <Link to="/">← Back to THE LOST TREASURE</Link>
       </p>
     </div>
   );
