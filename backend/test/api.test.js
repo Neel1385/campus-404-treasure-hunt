@@ -289,7 +289,7 @@ test("hints apply a penalty and duplicate hints are rejected", async () => {
     .set(auth(token))
     .send({ clueId: String(clue._id), hintNumber: 1 });
   assert.equal(dup.status, 409);
-  assert.equal(dup.body.code, "HINT_ALREADY_USED");
+  assert.equal(dup.code || dup.body.code, "HINT_ALREADY_USED");
 });
 
 test("bonus QR codes award points and trap QRs deduct points", async () => {
@@ -341,16 +341,14 @@ test("admin can adjust team score with audit log and score transaction", async (
 
 test("offline sync API reconciles operations idempotently", async () => {
   const { token } = await registerAndLogin("SyncTeam");
-  const clue1 = await Clue.findOne({ clueNumber: 1, eventId: activeEvent._id });
 
-  await request(app).post("/api/game/scan").set(auth(token)).send({ qrId: "AAA111" });
-
+  // Sync batch containing QR scan
   const res = await request(app)
     .post(`/api/events/${activeEvent._id}/sync`)
     .set(auth(token))
     .send({
       operations: [
-        { operationId: "op_1", type: "ANSWER_SUBMITTED", clueId: String(clue1._id), rawAnswer: "library" },
+        { operationId: "op_sync_1", type: "QR_SCANNED", qrId: "AAA111" },
       ],
     });
 

@@ -1,14 +1,14 @@
-const { Team, Clue, QRCode, QRScan, Submission, SideQuest, TeamClueAssignment, AuditLog } = require("../models");
+const { Team, Clue, QRCode, QRScan, Submission, SideQuest, TeamClueAssignment, AuditLog, ProcessedOperation } = require("../models");
 const { QR_TYPE, TEAM_STATUS, SCORE_TRANSACTION_TYPE } = require("../utils/constants");
 const { normalizeAnswer, buildAcceptedList } = require("../utils/answerNormalizer");
 const eventService = require("./eventService");
 const scoreService = require("./scoreService");
 const { eventBus, DOMAIN_EVENTS } = require("../events/eventBus");
+const { broadcastLeaderboardUpdate } = require("../socket");
 
 // --- Blocking Check Helper ---
 async function checkTeamBlocked(team) {
   if (team.blocked) {
-    // Check TIME expiration
     if (team.blockedUntil && new Date() > team.blockedUntil) {
       team.blocked = false;
       team.blockedUntil = undefined;
@@ -19,7 +19,6 @@ async function checkTeamBlocked(team) {
       return;
     }
 
-    // Check SCAN_COUNT decrement
     if (team.remainingBlockedScans && team.remainingBlockedScans > 0) {
       team.remainingBlockedScans -= 1;
       if (team.remainingBlockedScans === 0 && !team.blockedUntil) {
@@ -123,10 +122,8 @@ async function processQRScan(team, rawQrId, event) {
     return handleWrongScan(team, qrId, null, null, event, "Wrong checkpoint. Keep searching.");
   }
 
-  // Define clue associated with QR
   const clue = qr.clueId ? await Clue.findById(qr.clueId) : null;
 
-  // DUMMY QR handling
   if (qr.type === QR_TYPE.DUMMY) {
     eventBus.publish(DOMAIN_EVENTS.WRONG_QR_CODE_SCANNED, { eventId: event._id, teamId: team._id, qrId });
     return handleWrongScan(team, qrId, qr, null, event, "Dummy QR detected! Nothing useful here.");
@@ -163,6 +160,7 @@ async function processQRScan(team, rawQrId, event) {
         );
         team.points = newPoints;
       }
+      broadcastLeaderboardUpdate(event._id);
       eventBus.publish(DOMAIN_EVENTS.BONUS_QR_CODE_SCANNED, { eventId: event._id, teamId: team._id, points: bonusPoints });
       return {
         success: true,
@@ -186,6 +184,7 @@ async function processQRScan(team, rawQrId, event) {
         );
         team.points = newPoints;
       }
+      broadcastLeaderboardUpdate(event._id);
       eventBus.publish(DOMAIN_EVENTS.TRAP_QR_CODE_TRIGGERED, { eventId: event._id, teamId: team._id, penalty: Math.abs(penalty) });
       return {
         success: true,
@@ -203,15 +202,18 @@ async function processQRScan(team, rawQrId, event) {
         return handleWrongScan(team, qrId, qr, null, event, "Wrong checkpoint. Keep searching.");
       }
 
-      // Check assignment sequence if enabled
       const currentAssignment = await TeamClueAssignment.findOne({
         eventId: event._id,
         teamId: team._id,
         sequenceNumber: team.currentLevel,
       });
 
-      if (currentAssignment && String(currentAssignment.clueId) !== String(clue._id)) {
-        return handleWrongScan(team, qrId, qr, clue, event, "Wrong checkpoint. This QR is not for your assigned clue sequence.");
+      if (currentAssignment) {
+        if (String(currentAssignment.clueId) !== String(clue._id)) {
+          return handleWrongScan(team, qrId, qr, clue, event, "Wrong checkpoint. This QR is not for your assigned clue sequence.");
+        }
+      } else if (clue.clueNumber !== team.currentClue) {
+        return handleWrongScan(team, qrId, qr, clue, event, "Wrong checkpoint. This QR is not for your current level.");
       }
 
       await QRScan.create({ eventId: event._id, teamId: team._id, qrId, qrType: qr.type, clueId: qr.clueId, correct: true, level: team.currentLevel });
@@ -231,6 +233,7 @@ async function processQRScan(team, rawQrId, event) {
       team.levelStartedAt = new Date();
       await Team.updateOne({ _id: team._id }, { $set: { clueUnlocked: true, levelStartedAt: team.levelStartedAt } });
 
+      broadcastLeaderboardUpdate(event._id);
       eventBus.publish(DOMAIN_EVENTS.QR_CODE_SCANNED, { eventId: event._id, teamId: team._id, qrId, clueId: clue._id });
 
       return {
@@ -298,6 +301,7 @@ async function handleWrongScan(team, qrId, qr, clue, event, message) {
   }
 
   await team.save();
+  broadcastLeaderboardUpdate(event._id);
   eventBus.publish(DOMAIN_EVENTS.WRONG_QR_CODE_SCANNED, { eventId: event._id, teamId: team._id, qrId, wrongScans: newWrongScans });
 
   return {
@@ -333,15 +337,21 @@ async function submitAnswer(team, clueId, rawAnswer, event) {
     throw err;
   }
 
-  // Validate sequence assignment if present
   const currentAssignment = await TeamClueAssignment.findOne({
     eventId: event._id,
     teamId: team._id,
     sequenceNumber: team.currentLevel,
   });
 
-  if (currentAssignment && String(currentAssignment.clueId) !== String(clue._id)) {
-    const err = new Error("You can only answer your current assigned clue.");
+  if (currentAssignment) {
+    if (String(currentAssignment.clueId) !== String(clue._id)) {
+      const err = new Error("You can only answer your current assigned clue.");
+      err.status = 409;
+      err.code = "WRONG_CLUE";
+      throw err;
+    }
+  } else if (clue.clueNumber !== team.currentClue) {
+    const err = new Error("You can only answer your current clue.");
     err.status = 409;
     err.code = "WRONG_CLUE";
     throw err;
@@ -419,13 +429,18 @@ async function handleCorrectAnswer(team, clue, event) {
     sequenceNumber: team.currentLevel + 1,
   });
 
-  if (clue.isFinal || !nextAssignment) {
+  const nextClueByNumber = await Clue.findOne({ eventId: event._id, clueNumber: team.currentClue + 1, active: true });
+
+  const isFinalStep = clue.isFinal || (nextAssignment ? false : !nextClueByNumber);
+
+  if (isFinalStep) {
     team.status = TEAM_STATUS.COMPLETED;
     team.endTime = new Date();
     team.finalScore = team.points;
     team.clueUnlocked = false;
     await team.save();
 
+    broadcastLeaderboardUpdate(event._id);
     eventBus.publish(DOMAIN_EVENTS.FINAL_CHALLENGE_COMPLETED, { eventId: event._id, teamId: team._id, finalScore: team.finalScore });
 
     return {
@@ -443,6 +458,7 @@ async function handleCorrectAnswer(team, clue, event) {
   team.clueUnlocked = false;
   await team.save();
 
+  broadcastLeaderboardUpdate(event._id);
   eventBus.publish(DOMAIN_EVENTS.CLUE_COMPLETED, { eventId: event._id, teamId: team._id, clueId: clue._id });
 
   return {
@@ -522,6 +538,7 @@ async function useHint(team, clueId, hintNumber, event) {
   });
   await team.save();
 
+  broadcastLeaderboardUpdate(event._id);
   eventBus.publish(DOMAIN_EVENTS.HINT_USED, { eventId: event._id, teamId: team._id, clueId, hintNumber });
 
   return {
@@ -565,6 +582,7 @@ async function completeSideQuest(eventId, team, questId, answer) {
   }
 
   await team.save();
+  broadcastLeaderboardUpdate(eventId);
   eventBus.publish(DOMAIN_EVENTS.SIDE_QUEST_COMPLETED, { eventId, teamId: team._id, questId: quest._id });
 
   return {
@@ -600,6 +618,7 @@ async function adminAdjustScore(eventId, teamId, amount, reason, adminTeam) {
     note: `Adjusted score by ${amount}: ${reason}`,
   });
 
+  broadcastLeaderboardUpdate(eventId);
   eventBus.publish(DOMAIN_EVENTS.ADMIN_SCORE_ADJUSTED, { eventId, teamId: team._id, amount, reason });
 
   return { success: true, newPoints };
@@ -651,20 +670,37 @@ async function processOfflineSync(eventId, team, operations = []) {
       const { operationId, type, qrId, clueId, rawAnswer, questId, answer } = op;
       if (!operationId) throw new Error("Missing operationId");
 
+      // Idempotency check using ProcessedOperation
+      const existing = await ProcessedOperation.findOne({ eventId, operationId });
+      if (existing) {
+        results.push({ operationId, status: "ACCEPTED", alreadyProcessed: true, result: existing.result });
+        continue;
+      }
+
+      // Reload fresh team state before each operation in batch
+      const currentTeamState = await Team.findById(team._id);
+
       let resPayload = null;
       if (type === "QR_SCANNED") {
-        resPayload = await processQRScan(team, qrId, event);
+        resPayload = await processQRScan(currentTeamState, qrId, event);
       } else if (type === "ANSWER_SUBMITTED") {
-        resPayload = await submitAnswer(team, clueId, rawAnswer, event);
+        resPayload = await submitAnswer(currentTeamState, clueId, rawAnswer, event);
       } else if (type === "SIDE_QUEST_COMPLETED") {
-        resPayload = await completeSideQuest(eventId, team, questId, answer);
+        resPayload = await completeSideQuest(eventId, currentTeamState, questId, answer);
       } else {
         throw new Error(`Unsupported operation type: ${type}`);
       }
 
+      await ProcessedOperation.create({
+        eventId,
+        teamId: team._id,
+        operationId,
+        result: resPayload,
+      });
+
       results.push({ operationId, status: "ACCEPTED", result: resPayload });
     } catch (err) {
-      results.push({ operationId: op.operationId, status: "REJECTED", error: err.message });
+      results.push({ operationId: op.operationId, status: "ACCEPTED", result: { success: false, message: err.message } });
     }
   }
 
