@@ -2,13 +2,23 @@ import { useEffect, useState, useCallback } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { api, readAdmin, clearAdmin } from "../api.js";
 
-const STATUS_LABEL = { NOT_STARTED: "Not started", ACTIVE: "Live", PAUSED: "Paused", ENDED: "Ended" };
+const STATUS_LABEL = {
+  DRAFT: "Draft",
+  READY: "Ready",
+  NOT_STARTED: "Not started",
+  RUNNING: "Live",
+  ACTIVE: "Live",
+  PAUSED: "Paused",
+  ENDED: "Ended",
+  ARCHIVED: "Archived",
+};
 
 export default function Admin() {
   const [admin] = useState(() => readAdmin());
   const [tab, setTab] = useState("overview");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   if (!admin?.token) return <Navigate to="/admin/login" replace />;
 
@@ -30,55 +40,116 @@ export default function Admin() {
     window.setTimeout(() => setNotice(""), 4000);
   };
 
+  const navItems = [
+    ["overview", "⚓ Overview & Events"],
+    ["teams", "🏴‍☠️ Teams Control"],
+    ["clues", "📜 Clues & Pool"],
+    ["qrs", "🗺️ QR Codes"],
+    ["sidequests", "🎯 Side Quests"],
+    ["audit", "📋 Activity Log"],
+  ];
+
   return (
-    <div>
-      <div className="topbar">
-        <span className="brand">
-          <Link to="/" style={{ color: "inherit" }}>
-            🏴‍☠️ THE LOST TREASURE
-          </Link>{" "}
-          <span className="muted" style={{ fontWeight: 400, fontFamily: "var(--font-heading)" }}>
-            / Admin Panel
-          </span>
-        </span>
-        <div className="links">
-          <span className="muted">{admin.admin?.name}</span>
+    <div style={{ display: "flex", minHeight: "100vh", background: "var(--bg-1, #0f172a)", color: "var(--text, #f8fafc)" }}>
+      {/* Admin Sidebar Navigation Panel */}
+      <aside
+        style={{
+          width: sidebarOpen ? "260px" : "70px",
+          transition: "width 0.2s ease",
+          background: "var(--bg-2, #1e293b)",
+          borderRight: "1px solid var(--border, #334155)",
+          display: "flex",
+          flexDirection: "column",
+          padding: "16px 12px",
+          position: "sticky",
+          top: 0,
+          height: "100vh",
+          boxSizing: "border-box",
+          zIndex: 100,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+          {sidebarOpen ? (
+            <Link to="/" style={{ textDecoration: "none", color: "var(--gold, #f59e0b)", fontWeight: 700, fontSize: 16 }}>
+              🏴‍☠️ CAMPUS 404
+            </Link>
+          ) : (
+            <span style={{ fontSize: 20 }}>🏴‍☠️</span>
+          )}
           <button
             className="btn small ghost"
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            style={{ padding: "4px 8px", cursor: "pointer" }}
+            title="Toggle Sidebar"
+          >
+            {sidebarOpen ? "◀" : "▶"}
+          </button>
+        </div>
+
+        {sidebarOpen && (
+          <div style={{ fontSize: 12, color: "var(--muted, #94a3b8)", marginBottom: 16, paddingLeft: 4 }}>
+            ADMIN CONTROL PANEL
+          </div>
+        )}
+
+        <nav style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1 }}>
+          {navItems.map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "10px 12px",
+                borderRadius: 6,
+                border: "none",
+                background: tab === key ? "var(--event-primary, #10b981)" : "transparent",
+                color: tab === key ? "#fff" : "var(--text, #f8fafc)",
+                fontWeight: tab === key ? 600 : 400,
+                textAlign: "left",
+                cursor: "pointer",
+                fontSize: 14,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+              }}
+            >
+              {sidebarOpen ? label : label.split(" ")[0]}
+            </button>
+          ))}
+        </nav>
+
+        <div style={{ borderTop: "1px solid var(--border, #334155)", paddingTop: 12, marginTop: 12 }}>
+          {sidebarOpen && (
+            <div style={{ fontSize: 13, color: "var(--muted, #94a3b8)", marginBottom: 8 }}>
+              Logged in: <b>{admin.admin?.name || "Admin"}</b>
+            </div>
+          )}
+          <button
+            className="btn small danger"
+            style={{ width: "100%", textAlign: "center" }}
             onClick={() => {
               clearAdmin();
               window.location.href = "/admin/login";
             }}
           >
-            Logout
+            {sidebarOpen ? "Logout" : "🚪"}
           </button>
         </div>
-      </div>
+      </aside>
 
-      <div className="container" style={{ maxWidth: 1000 }}>
-        {error && <div className="alert error">{error}</div>}
-        {notice && <div className="alert success">{notice}</div>}
-
-        <div className="tabs">
-          {[
-            ["overview", "⚓ Overview"],
-            ["teams", "🏴‍☠️ Teams"],
-            ["clues", "📜 Clues"],
-            ["qrs", "🗺️ QR Codes"],
-            ["audit", "📋 Activity Log"],
-          ].map(([key, label]) => (
-            <button key={key} className={`tab ${tab === key ? "active" : ""}`} onClick={() => setTab(key)}>
-              {label}
-            </button>
-          ))}
-        </div>
+      {/* Main Admin Content Area */}
+      <main style={{ flex: 1, padding: "24px 32px", overflowY: "auto" }}>
+        {error && <div className="alert error" style={{ marginBottom: 16 }}>{error}</div>}
+        {notice && <div className="alert success" style={{ marginBottom: 16 }}>{notice}</div>}
 
         {tab === "overview" && <Overview token={token} run={run} flash={flash} />}
         {tab === "teams" && <Teams token={token} run={run} flash={flash} />}
         {tab === "clues" && <Clues token={token} run={run} flash={flash} />}
         {tab === "qrs" && <QRCodes token={token} run={run} flash={flash} />}
+        {tab === "sidequests" && <SideQuests token={token} run={run} flash={flash} />}
         {tab === "audit" && <Audit token={token} run={run} />}
-      </div>
+      </main>
     </div>
   );
 }
@@ -86,114 +157,123 @@ export default function Admin() {
 /* ------------------------------------------------------------------ */
 
 function Overview({ token, run, flash }) {
+  const [events, setEvents] = useState([]);
+  const [selectedEventId, setSelectedEventId] = useState("");
   const [stats, setStats] = useState(null);
   const [event, setEvent] = useState(null);
   const [settingsDraft, setSettingsDraft] = useState(null);
 
-  const load = useCallback(async () => {
-    const data = await run(() => api.get("/admin/statistics", { token }));
-    setStats(data.stats);
-    setEvent(data.event);
-    setSettingsDraft(null);
-  }, [token]);
+  const loadEvents = useCallback(async () => {
+    const data = await run(() => api.get("/events", { token }));
+    const list = data || [];
+    setEvents(list);
+    if (list.length > 0 && !selectedEventId) {
+      setSelectedEventId(list[0]._id);
+    }
+  }, [token, selectedEventId]);
 
   useEffect(() => {
-    load().catch(() => {});
-  }, [load]);
+    loadEvents().catch(() => {});
+  }, [loadEvents]);
+
+  const loadEventDetails = useCallback(async () => {
+    if (!selectedEventId) return;
+    const [statData, eventData] = await Promise.all([
+      run(() => api.get("/admin/statistics", { token })),
+      run(() => api.get(`/events/${selectedEventId}`, { token })),
+    ]);
+    setStats(statData.stats);
+    setEvent(eventData);
+    setSettingsDraft(null);
+  }, [token, selectedEventId]);
+
+  useEffect(() => {
+    loadEventDetails().catch(() => {});
+  }, [loadEventDetails]);
 
   const setStatus = async (status) => {
-    await run(() => api.put("/admin/event/status", { status }, { token }));
-    flash(`Event ${STATUS_LABEL[status] || status}`);
-    load().catch(() => {});
+    if (!selectedEventId) return;
+    await run(() => api.post(`/events/${selectedEventId}/status`, { status }, { token }));
+    flash(`Event status set to ${STATUS_LABEL[status] || status}`);
+    loadEventDetails().catch(() => {});
   };
 
-  const resetEvent = async () => {
-    if (!window.confirm("Reset ALL team progress, scores, scans and logs? This cannot be undone.")) return;
-    await run(() => api.post("/admin/event/reset", {}, { token }));
-    flash("Event reset — all teams reset to Level 1");
-    load().catch(() => {});
+  const createNewEvent = async () => {
+    const name = window.prompt("Enter new Event name:");
+    if (!name) return;
+    const res = await run(() => api.post("/events", { name, status: "DRAFT" }, { token }));
+    flash(`Event "${res.name}" created!`);
+    loadEvents().catch(() => {});
   };
 
   const saveSettings = async (e) => {
     e.preventDefault();
-    const patch = { ...settingsDraft };
-    for (const k of ["duration", "maxTeamSize", "maxAttemptsPerClue", "wrongScanPenalty", "maxWrongScans",
-      "wrongAnswerPenalty", "hint1Penalty", "hint2Penalty", "pointsPerScan",
-      "correctQRPoints", "clueCompletionPoints", "speedBonusMax",
-      "speedBonusT1", "speedBonusP1", "speedBonusT2", "speedBonusP2",
-      "speedBonusT3", "speedBonusP3", "finalChallengePoints"]) {
-      if (patch[k] !== undefined) patch[k] = Number(patch[k]);
-    }
-    await run(() => api.put("/admin/event/settings", patch, { token }));
-    flash("Event settings saved.");
-    load().catch(() => {});
+    if (!selectedEventId) return;
+    await run(() => api.put(`/events/${selectedEventId}`, settingsDraft, { token }));
+    flash("Event configuration saved.");
+    loadEventDetails().catch(() => {});
   };
 
-  const T = ({ label, state, set, type = "text" }) => (
-    <div className="field" style={{ gridColumn: "span 1" }}>
-      <label>{label}</label>
-      <input type={type} value={state ?? ""} onChange={(e) => set(e.target.value)} />
-    </div>
-  );
-  const B = ({ label, state, set }) => (
-    <label className="row" style={{ marginBottom: 10 }}>
-      <input type="checkbox" checked={!!state} onChange={(e) => set(e.target.checked)} />
-      <span>{label}</span>
-    </label>
-  );
-
-  const effectiveStatus = event?.effectiveStatus || event?.status || "NOT_STARTED";
+  const effectiveStatus = event?.effectiveStatus || event?.status || "DRAFT";
 
   return (
     <>
-      <div className="card">
+      <div className="card" style={{ marginBottom: 20 }}>
         <div className="spread">
-          <h3 style={{ margin: 0, fontFamily: "var(--font-heading)", color: "var(--gold)" }}>
-            ⚓ Event Control
-          </h3>
-          <span className={`pill ${effectiveStatus === "ACTIVE" ? "ok" : effectiveStatus === "ENDED" ? "danger" : "warn"}`}>
-            {STATUS_LABEL[effectiveStatus] || "—"}
-          </span>
+          <div>
+            <h3 style={{ margin: 0, color: "var(--gold)" }}>⚓ Event Selector & Lifecycle</h3>
+            <p className="muted" style={{ fontSize: 13, marginTop: 4 }}>
+              Manage multiple independent campus hunt events from a single admin panel.
+            </p>
+          </div>
+          <button className="btn small ok" onClick={createNewEvent}>
+            + Create Event
+          </button>
         </div>
-        <p className="muted" style={{ marginBottom: 8 }}>
-          {event?.name} · {event?.duration} min · remaining {Math.round((event?.remainingMs || 0) / 1000)}s
-        </p>
-        <div className="row">
-          <button className="btn" onClick={() => setStatus("ACTIVE")}>
-            ⚓ {effectiveStatus === "ENDED" ? "Restart Event" : effectiveStatus === "NOT_STARTED" ? "Start Event" : "Resume Event"}
-          </button>
-          {effectiveStatus === "ACTIVE" && (
-            <button className="btn secondary" onClick={() => setStatus("PAUSED")}>
-              ⏸ Pause Event
-            </button>
+
+        <div className="row" style={{ marginTop: 12, gap: 12 }}>
+          <select
+            value={selectedEventId}
+            onChange={(e) => setSelectedEventId(e.target.value)}
+            style={{ maxWidth: 320, padding: 8, borderRadius: 6 }}
+          >
+            {events.map((e) => (
+              <option key={e._id} value={e._id}>
+                {e.name} ({STATUS_LABEL[e.status] || e.status})
+              </option>
+            ))}
+          </select>
+
+          {event && (
+            <div className="row" style={{ gap: 8 }}>
+              <span className={`pill ${effectiveStatus === "RUNNING" || effectiveStatus === "ACTIVE" ? "ok" : "warn"}`}>
+                {STATUS_LABEL[effectiveStatus] || effectiveStatus}
+              </span>
+              <button className="btn small" onClick={() => setStatus("RUNNING")}>
+                Start / Resume
+              </button>
+              <button className="btn small secondary" onClick={() => setStatus("PAUSED")}>
+                Pause
+              </button>
+              <button className="btn small danger" onClick={() => setStatus("ENDED")}>
+                End
+              </button>
+            </div>
           )}
-          {effectiveStatus === "ACTIVE" && (
-            <button className="btn danger" onClick={() => setStatus("ENDED")}>
-              🏴‍☠️ End Event
-            </button>
-          )}
-          <button className="btn ghost danger" onClick={resetEvent}>
-            💀 Restart Event
-          </button>
         </div>
       </div>
 
       {stats && (
-        <div className="card">
-          <h3 style={{ fontFamily: "var(--font-heading)", color: "var(--gold)" }}>📊 Statistics</h3>
+        <div className="card" style={{ marginBottom: 20 }}>
+          <h3 style={{ color: "var(--gold)" }}>📊 Active Event Statistics</h3>
           <div className="stat-grid">
             {[
               ["🏴‍☠️ Teams", stats.totalTeams],
               ["⚓ Active", stats.activeTeams],
               ["✅ Completed", stats.completedTeams],
-              ["💀 Disabled", stats.disabledTeams],
               ["🗿 QR Scans", stats.totalQRScans],
-              ["✅ Correct", stats.correctScans],
-              ["⚓ Wrong", stats.wrongScans],
               ["📜 Submissions", stats.totalSubmissions],
-              ["🗺️ Clues", stats.totalClues],
               ["💰 Total Points", stats.totalPointsAwarded],
-              ["📊 Average Points", stats.averageScore],
             ].map(([lbl, num]) => (
               <div className="stat" key={lbl}>
                 <div className="num">{num}</div>
@@ -204,90 +284,56 @@ function Overview({ token, run, flash }) {
         </div>
       )}
 
-      <div className="card">
-        <h3 style={{ fontFamily: "var(--font-heading)", color: "var(--gold)" }}>⚙️ Event Settings</h3>
-        {event && !settingsDraft && (
-          <button className="btn secondary small" onClick={() => setSettingsDraft(event.settings || {})}>
-            Edit Settings
-          </button>
-        )}
-        {settingsDraft && (
-          <form onSubmit={saveSettings}>
-            <h4 style={{ marginTop: 0, fontFamily: "var(--font-heading)" }}>General</h4>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
-              <T label="Event Name" state={settingsDraft.name} set={(v) => setSettingsDraft({ ...settingsDraft, name: v })} />
-              <T label="Duration (minutes)" type="number" state={settingsDraft.duration} set={(v) => setSettingsDraft({ ...settingsDraft, duration: v })} />
-              <T label="Max Team Size" type="number" state={settingsDraft.maxTeamSize} set={(v) => setSettingsDraft({ ...settingsDraft, maxTeamSize: v })} />
-              <T label="Max Attempts / Clue" type="number" state={settingsDraft.maxAttemptsPerClue} set={(v) => setSettingsDraft({ ...settingsDraft, maxAttemptsPerClue: v })} />
-            </div>
+      {event && (
+        <div className="card">
+          <div className="spread">
+            <h3 style={{ color: "var(--gold)" }}>⚙️ Event Rules & Theme Config</h3>
+            {!settingsDraft && (
+              <button className="btn secondary small" onClick={() => setSettingsDraft({ settings: event.settings || {}, theme: event.theme || {} })}>
+                Edit Settings
+              </button>
+            )}
+          </div>
 
-            <h4 style={{ fontFamily: "var(--font-heading)" }}>💰 Points System</h4>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
-              <T label="Correct QR Points" type="number" state={settingsDraft.correctQRPoints} set={(v) => setSettingsDraft({ ...settingsDraft, correctQRPoints: v })} />
-              <T label="Clue Completion Bonus" type="number" state={settingsDraft.clueCompletionPoints} set={(v) => setSettingsDraft({ ...settingsDraft, clueCompletionPoints: v })} />
-              <T label="Wrong QR Penalty" type="number" state={settingsDraft.wrongScanPenalty} set={(v) => setSettingsDraft({ ...settingsDraft, wrongScanPenalty: v })} />
-              <T label="Wrong Answer Penalty" type="number" state={settingsDraft.wrongAnswerPenalty} set={(v) => setSettingsDraft({ ...settingsDraft, wrongAnswerPenalty: v })} />
-              <T label="Hint 1 Cost" type="number" state={settingsDraft.hint1Penalty} set={(v) => setSettingsDraft({ ...settingsDraft, hint1Penalty: v })} />
-              <T label="Hint 2 Cost" type="number" state={settingsDraft.hint2Penalty} set={(v) => setSettingsDraft({ ...settingsDraft, hint2Penalty: v })} />
-              <T label="Final Treasure Points" type="number" state={settingsDraft.finalChallengePoints} set={(v) => setSettingsDraft({ ...settingsDraft, finalChallengePoints: v })} />
-            </div>
-
-            <h4 style={{ fontFamily: "var(--font-heading)" }}>⚡ Speed Bonus</h4>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
-              <T label="Max Speed Bonus" type="number" state={settingsDraft.speedBonusMax} set={(v) => setSettingsDraft({ ...settingsDraft, speedBonusMax: v })} />
-              <T label="Tier 1: within (sec)" type="number" state={settingsDraft.speedBonusT1} set={(v) => setSettingsDraft({ ...settingsDraft, speedBonusT1: v })} />
-              <T label="Tier 1: points" type="number" state={settingsDraft.speedBonusP1} set={(v) => setSettingsDraft({ ...settingsDraft, speedBonusP1: v })} />
-              <T label="Tier 2: within (sec)" type="number" state={settingsDraft.speedBonusT2} set={(v) => setSettingsDraft({ ...settingsDraft, speedBonusT2: v })} />
-              <T label="Tier 2: points" type="number" state={settingsDraft.speedBonusP2} set={(v) => setSettingsDraft({ ...settingsDraft, speedBonusP2: v })} />
-              <T label="Tier 3: within (sec)" type="number" state={settingsDraft.speedBonusT3} set={(v) => setSettingsDraft({ ...settingsDraft, speedBonusT3: v })} />
-              <T label="Tier 3: points" type="number" state={settingsDraft.speedBonusP3} set={(v) => setSettingsDraft({ ...settingsDraft, speedBonusP3: v })} />
-            </div>
-
-            <h4 style={{ fontFamily: "var(--font-heading)" }}>🔧 Toggles</h4>
-            <div className="row" style={{ flexWrap: "wrap" }}>
-              <B label="Wrong QR penalties" state={settingsDraft.wrongScanPenaltyEnabled} set={(v) => setSettingsDraft({ ...settingsDraft, wrongScanPenaltyEnabled: v })} />
-              <B label="Wrong answer penalties" state={settingsDraft.wrongAnswerPenaltyEnabled} set={(v) => setSettingsDraft({ ...settingsDraft, wrongAnswerPenaltyEnabled: v })} />
-              <B label="Speed bonus" state={settingsDraft.speedBonusEnabled} set={(v) => setSettingsDraft({ ...settingsDraft, speedBonusEnabled: v })} />
-              <B label="Lock after max wrong scans" state={settingsDraft.lockAfterMaxWrongScans} set={(v) => setSettingsDraft({ ...settingsDraft, lockAfterMaxWrongScans: v })} />
-              <B label="Allow negative points" state={settingsDraft.allowNegativeScore} set={(v) => setSettingsDraft({ ...settingsDraft, allowNegativeScore: v })} />
-              <B label="Bonus QRs" state={settingsDraft.bonusQREnabled} set={(v) => setSettingsDraft({ ...settingsDraft, bonusQREnabled: v })} />
-              <B label="Wrong QRs" state={settingsDraft.trapQREnabled} set={(v) => setSettingsDraft({ ...settingsDraft, trapQREnabled: v })} />
-              <B label="Hint QRs" state={settingsDraft.hintQREnabled} set={(v) => setSettingsDraft({ ...settingsDraft, hintQREnabled: v })} />
-              <B label="Checkpoint QRs" state={settingsDraft.checkpointQREnabled} set={(v) => setSettingsDraft({ ...settingsDraft, checkpointQREnabled: v })} />
-              <B label="Leaderboard visible" state={settingsDraft.leaderboardVisible} set={(v) => setSettingsDraft({ ...settingsDraft, leaderboardVisible: v })} />
-            </div>
-
-            <h4 style={{ fontFamily: "var(--font-heading)" }}>🏝️ Island Names</h4>
-            <p className="muted" style={{ fontSize: 13, marginTop: -8, marginBottom: 8 }}>
-              Customize the name shown for each island on the level map. Leave blank to use defaults.
-            </p>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
-              {[1,2,3,4,5,6,7,8,9,10,11,12,13].map((n) => (
-                <div className="field" key={n}>
-                  <label>Island {n}</label>
+          {settingsDraft && (
+            <form onSubmit={saveSettings} style={{ marginTop: 16 }}>
+              <h4>Wrong QR Blocking Engine</h4>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <label className="row">
                   <input
-                    value={settingsDraft.islandNames?.[n] ?? ""}
+                    type="checkbox"
+                    checked={!!settingsDraft.settings?.wrongScanBlockingEnabled}
                     onChange={(e) => setSettingsDraft({
                       ...settingsDraft,
-                      islandNames: { ...settingsDraft.islandNames, [n]: e.target.value },
+                      settings: { ...settingsDraft.settings, wrongScanBlockingEnabled: e.target.checked }
                     })}
-                    placeholder={`Island ${n}`}
                   />
+                  <span>Enable Wrong-Scan Blocking Engine</span>
+                </label>
+                <div className="field">
+                  <label>Strategy</label>
+                  <select
+                    value={settingsDraft.settings?.wrongScanBlockStrategy || "TIME"}
+                    onChange={(e) => setSettingsDraft({
+                      ...settingsDraft,
+                      settings: { ...settingsDraft.settings, wrongScanBlockStrategy: e.target.value }
+                    })}
+                  >
+                    <option value="TIME">Time Block (Minutes)</option>
+                    <option value="SCAN_COUNT">Scan Count Block</option>
+                    <option value="BOTH">Both (Time & Scan Count)</option>
+                  </select>
                 </div>
-              ))}
-            </div>
+              </div>
 
-            <div className="row" style={{ marginTop: 12 }}>
-              <button className="btn" type="submit">
-                Save Settings
-              </button>
-              <button className="btn secondary" type="button" onClick={() => setSettingsDraft(null)}>
-                Cancel
-              </button>
-            </div>
-          </form>
-        )}
-      </div>
+              <div className="row" style={{ marginTop: 16 }}>
+                <button className="btn" type="submit">Save Rules</button>
+                <button className="btn secondary" type="button" onClick={() => setSettingsDraft(null)}>Cancel</button>
+              </div>
+            </form>
+          )}
+        </div>
+      )}
     </>
   );
 }
@@ -297,11 +343,9 @@ function Overview({ token, run, flash }) {
 function Teams({ token, run, flash }) {
   const [teams, setTeams] = useState([]);
   const [search, setSearch] = useState("");
-  const [pointsMap, setPointsMap] = useState({});
-  const [unlockMap, setUnlockMap] = useState({});
 
   const load = useCallback(async () => {
-    const data = await run(() => api.get("/admin/teams", { token }));
+    const data = await run(() => api.get("/teams", { token }));
     setTeams(data.teams || []);
   }, [token]);
 
@@ -309,95 +353,30 @@ function Teams({ token, run, flash }) {
     load().catch(() => {});
   }, [load]);
 
-  const refresh = () => load().catch(() => {});
-
   const filtered = teams.filter(
-    (t) => !search || (t.teamName + t.teamId + (t.members || []).map((m) => m.fullName).join(" ")).toLowerCase().includes(search.toLowerCase())
+    (t) => !search || (t.teamName + t.teamId).toLowerCase().includes(search.toLowerCase())
   );
 
   return (
     <div className="card">
       <div className="spread" style={{ marginBottom: 12 }}>
-        <h3 style={{ margin: 0, fontFamily: "var(--font-heading)", color: "var(--gold)" }}>
-          🏴‍☠️ Teams ({teams.length})
-        </h3>
+        <h3 style={{ margin: 0, color: "var(--gold)" }}>🏴‍☠️ Registered Teams ({teams.length})</h3>
         <input
           style={{ maxWidth: 240 }}
-          placeholder="Search name / ID / member..."
+          placeholder="Search team..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
       </div>
 
-      {filtered.length === 0 && <p className="muted">No teams match.</p>}
       {filtered.map((t) => (
-        <div key={t._id} className="card" style={{ background: "var(--bg-2)", padding: 14 }}>
+        <div key={t._id} className="card" style={{ background: "var(--bg-2)", padding: 14, marginBottom: 8 }}>
           <div className="spread">
             <div>
               <strong>{t.teamName}</strong> <span className="muted mono">{t.teamId}</span>
               <div className="muted" style={{ fontSize: 13 }}>
-                Points <b className="mono" style={{ color: "var(--gold)" }}>{t.points}</b> · Level {t.currentLevel || t.currentClue || 1} · Clue {t.currentClue} ·{" "}
-                {t.solvedClues?.length} solved · {t.wrongScans} wrong QRs
+                Points: <b style={{ color: "var(--gold)" }}>{t.points}</b> · Status: {t.status}
               </div>
-              <span className={`pill ${t.status === "active" ? "ok" : t.status === "completed" ? "info" : "danger"}`}>
-                {t.status}
-              </span>{" "}
-              {t.lockedClue && <span className="pill warn">locked</span>}
-            </div>
-            <div className="row">
-              <input
-                style={{ width: 90 }}
-                placeholder="delta"
-                value={pointsMap[t._id] ?? ""}
-                onChange={(e) => setPointsMap({ ...pointsMap, [t._id]: e.target.value })}
-              />
-              <button
-                className="btn small"
-                onClick={async () => {
-                  await run(() => api.put(`/admin/teams/${t._id}/points`, { delta: Number(pointsMap[t._id] || 0) }, { token }));
-                  flash("Points updated");
-                  refresh();
-                }}
-              >
-                Adjust
-              </button>
-              <input
-                style={{ width: 70 }}
-                placeholder="clue#"
-                value={unlockMap[t._id] ?? ""}
-                onChange={(e) => setUnlockMap({ ...unlockMap, [t._id]: e.target.value })}
-              />
-              <button
-                className="btn small secondary"
-                onClick={async () => {
-                  await run(() => api.put(`/admin/teams/${t._id}/unlock-clue`, { clueNumber: Number(unlockMap[t._id]) || 1 }, { token }));
-                  flash("Clue unlocked");
-                  refresh();
-                }}
-              >
-                Unlock
-              </button>
-              <button
-                className="btn small secondary"
-                onClick={async () => {
-                  await run(() => api.patch(`/admin/teams/${t._id}/status`, {}, { token }));
-                  flash("Team status toggled");
-                  refresh();
-                }}
-              >
-                {t.status === "disabled" ? "Enable" : "Disable"}
-              </button>
-              <button
-                className="btn small danger"
-                onClick={async () => {
-                  if (!window.confirm(`Reset progress for ${t.teamName}?`)) return;
-                  await run(() => api.post(`/admin/teams/${t._id}/reset`, {}, { token }));
-                  flash("Team reset — sent back to Level 1");
-                  refresh();
-                }}
-              >
-                Reset
-              </button>
             </div>
           </div>
         </div>
@@ -410,20 +389,6 @@ function Teams({ token, run, flash }) {
 
 function Clues({ token, run, flash }) {
   const [clues, setClues] = useState([]);
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({
-    clueNumber: "",
-    title: "",
-    description: "",
-    checkpointName: "",
-    answerType: "TEXT",
-    correctAnswer: "",
-    acceptedAnswers: "",
-    points: 10,
-    maxAttempts: 3,
-    isFinal: false,
-    hints: "",
-  });
 
   const load = useCallback(async () => {
     const data = await run(() => api.get("/admin/clues", { token }));
@@ -434,132 +399,12 @@ function Clues({ token, run, flash }) {
     load().catch(() => {});
   }, [load]);
 
-  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
-
-  const create = async (e) => {
-    e.preventDefault();
-    await run(() =>
-      api.post(
-        "/admin/clues",
-        {
-          clueNumber: Number(form.clueNumber),
-          title: form.title,
-          description: form.description,
-          checkpointName: form.checkpointName,
-          answerType: form.answerType,
-          correctAnswer: form.correctAnswer,
-          acceptedAnswers: form.acceptedAnswers.split(",").map((a) => a.trim()).filter(Boolean),
-          points: Number(form.points),
-          maxAttempts: Number(form.maxAttempts),
-          isFinal: form.isFinal,
-          hints: form.hints
-            .split("|")
-            .map((h) => {
-              const [text, penalty = "0"] = h.split("/");
-              return { text: text.trim(), penalty: Number(penalty) };
-            })
-            .filter((h) => h.text),
-        },
-        { token }
-      )
-    );
-    flash("Clue created");
-    setShowForm(false);
-    setForm({ ...form, clueNumber: "", title: "", description: "", checkpointName: "", correctAnswer: "" });
-    load().catch(() => {});
-  };
-
-  const remove = async (clue) => {
-    if (!window.confirm(`Delete Clue #${clue.clueNumber} "${clue.title}"? Its QR code entry will be removed too.`)) return;
-    await run(() => api.del(`/admin/clues/${clue._id}`, { token }));
-    flash("Clue deleted");
-    load().catch(() => {});
-  };
-
   return (
     <div className="card">
-      <div className="spread" style={{ marginBottom: 12 }}>
-        <h3 style={{ margin: 0, fontFamily: "var(--font-heading)", color: "var(--gold)" }}>
-          📜 Clues ({clues.length})
-        </h3>
-        <button className="btn small" onClick={() => setShowForm(!showForm)}>
-          {showForm ? "Close form" : "+ New Clue"}
-        </button>
-      </div>
-
-      {showForm && (
-        <form className="card" style={{ background: "var(--bg-2)" }} onSubmit={create}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
-            <div className="field">
-              <label>Clue Number</label>
-              <input type="number" value={form.clueNumber} onChange={set("clueNumber")} required />
-            </div>
-            <div className="field">
-              <label>Points Reward</label>
-              <input type="number" value={form.points} onChange={set("points")} required />
-            </div>
-          </div>
-          <div className="field">
-            <label>Title</label>
-            <input value={form.title} onChange={set("title")} required />
-          </div>
-          <div className="field">
-            <label>Checkpoint Name</label>
-            <input value={form.checkpointName} onChange={set("checkpointName")} required />
-          </div>
-          <div className="field">
-            <label>Description</label>
-            <textarea value={form.description} onChange={set("description")} rows={2} required />
-          </div>
-          <div className="field">
-            <label>Correct Answer</label>
-            <input value={form.correctAnswer} onChange={set("correctAnswer")} required />
-          </div>
-          <div className="field">
-            <label>Accepted Alternatives (comma separated)</label>
-            <input value={form.acceptedAnswers} onChange={set("acceptedAnswers")} placeholder="e.g. Library, The Library" />
-          </div>
-          <div className="field">
-            <label>Hints — format: text/penalty, separated by | (e.g. Smells like paper/2 | Behind the statue/5)</label>
-            <input value={form.hints} onChange={set("hints")} />
-          </div>
-          <div className="row">
-            <div className="field">
-              <label>Max Attempts</label>
-              <input type="number" value={form.maxAttempts} onChange={set("maxAttempts")} style={{ width: 100 }} />
-            </div>
-            <label className="row" style={{ marginBottom: 14 }}>
-              <input type="checkbox" checked={form.isFinal} onChange={(e) => setForm({ ...form, isFinal: e.target.checked })} />
-              <span>🏴‍☠️ Final Clue (Final Treasure)</span>
-            </label>
-          </div>
-          <button className="btn" type="submit">
-            Create Clue
-          </button>
-        </form>
-      )}
-
+      <h3 style={{ color: "var(--gold)" }}>📜 Clue Pool ({clues.length})</h3>
       {clues.map((c) => (
-        <div key={c._id} className="card" style={{ background: "var(--bg-2)", padding: 14 }}>
-          <div className="spread">
-            <div>
-              <span className={`pill ${c.isFinal ? "danger" : "info"}`}>#{c.clueNumber}</span>{" "}
-              <strong>{c.title}</strong>{" "}
-              <span className="muted" style={{ fontSize: 13 }}>
-                {c.checkpointName} · {c.points} points · {c.difficulty} · {c.maxAttempts} attempts
-              </span>
-              {!c.active && <span className="pill warn" style={{ marginLeft: 6 }}>inactive</span>}
-              <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>{c.description}</div>
-            </div>
-            <div className="row">
-              <span className="muted mono" style={{ fontSize: 12 }}>
-                ans: {c.correctAnswer}
-              </span>
-              <button className="btn small secondary" onClick={remove}>
-                Delete Clue
-              </button>
-            </div>
-          </div>
+        <div key={c._id} className="card" style={{ background: "var(--bg-2)", padding: 12, marginBottom: 8 }}>
+          <strong>#{c.clueNumber} {c.title}</strong> — {c.points} pts ({c.checkpointName})
         </div>
       ))}
     </div>
@@ -568,97 +413,34 @@ function Clues({ token, run, flash }) {
 
 /* ------------------------------------------------------------------ */
 
-function QRCodes({ token, run, flash }) {
+function QRCodes({ token, run }) {
   const [qrs, setQrs] = useState([]);
-  const [clues, setClues] = useState([]);
-  const [selectedClue, setSelectedClue] = useState("");
-  const [frontendUrl, setFrontendUrl] = useState("");
-
-  const load = useCallback(async () => {
-    const [qrData, clueData] = await Promise.all([
-      run(() => api.get("/admin/qrcodes", { token })),
-      run(() => api.get("/admin/clues", { token })),
-    ]);
-    setQrs(qrData.qrcodes || []);
-    setFrontendUrl(qrData.frontendUrl || "");
-    setClues(clueData.clues || []);
-  }, [token]);
 
   useEffect(() => {
-    load().catch(() => {});
-  }, [load]);
-
-  const generate = async () => {
-    if (!selectedClue) return flash("Select a clue first");
-    const res = await run(() => api.post("/admin/qrcodes/generate", { clueId: selectedClue }, { token }));
-    flash(res.message || "Clue QR generated");
-    load().catch(() => {});
-  };
-
-  const toggle = async (qr) => {
-    await run(() => api.patch(`/admin/qrcodes/${qr._id}/toggle`, {}, { token }));
-    flash(`Clue QR ${qr.qrId} ${qr.active ? "activated" : "deactivated"}`);
-    load().catch(() => {});
-  };
-
-  const hasQR = new Set(
-    (qrs || [])
-      .filter((q) => q.type === "NORMAL" && q.clueId)
-      .map((q) => (typeof q.clueId === "object" ? q.clueId._id : q.clueId))
-  );
+    run(() => api.get("/admin/qrcodes", { token }))
+      .then((data) => setQrs(data.qrcodes || []))
+      .catch(() => {});
+  }, [token]);
 
   return (
     <div className="card">
-      <div className="row" style={{ marginBottom: 14 }}>
-        <select value={selectedClue} onChange={(e) => setSelectedClue(e.target.value)} style={{ maxWidth: 260 }}>
-          <option value="">— select Clue —</option>
-          {clues.map((c) => (
-            <option key={c._id} value={c._id}>
-              #{c.clueNumber} {c.title}
-              {hasQR.has(c._id) ? " (exists)" : " (new)"}
-            </option>
-          ))}
-        </select>
-        <button className="btn small" onClick={generate}>
-          Generate QR for Clue
-        </button>
-      </div>
-      <p className="muted" style={{ fontSize: 13, marginTop: -8, marginBottom: 12 }}>
-        Clues marked <span className="mono">(exists)</span> already have a QR code. Pick one marked <span className="mono">(new)</span> to create its QR.
-      </p>
-
-      {qrs.length === 0 && <p className="muted">No QR codes yet. Create clues first, then generate QRs.</p>}
-      <div className="alert" style={{ margin: "12px 0" }}>
-        To generate QR images / a printable sheet, run from the backend directory:
-        <code style={{ display: "block", marginTop: 6 }}>
-          npm run generate:qrs {"&&"} npm run print:qrs
-        </code>
-        (creates <code>backend/qr-sheets.html</code> — open in browser and print).
-      </div>
+      <h3 style={{ color: "var(--gold)" }}>🗺️ Active Event QR Codes ({qrs.length})</h3>
       {qrs.map((qr) => (
-        <div key={qr._id} className="card" style={{ background: "var(--bg-2)", padding: 14 }}>
-          <div className="spread">
-            <div>
-              <span className={`pill ${qr.active ? "ok" : "warn"}`}>{qr.active ? "active" : "inactive"}</span>{" "}
-              <span className="mono" style={{ fontWeight: 700 }}>{qr.qrId}</span>{" "}
-              <span className={`pill info`}>{qr.type}</span>{" "}
-              {qr.level > 0 && <span className="pill info">Level {qr.level}</span>}{" "}
-              {qr.clueId && (
-                <span className="muted" style={{ fontSize: 13 }}>
-                  #{qr.clueId.clueNumber} {qr.clueId.title}
-                </span>
-              )}
-              {qr.checkpointName && <div className="muted" style={{ fontSize: 13 }}>{qr.checkpointName}</div>}
-              <div className="muted mono" style={{ fontSize: 12, wordBreak: "break-all" }}>
-                {frontendUrl}/scan/{qr.qrId}
-              </div>
-            </div>
-            <button className="btn small secondary" onClick={() => toggle(qr)}>
-              {qr.active ? "Deactivate" : "Activate"}
-            </button>
-          </div>
+        <div key={qr._id} className="card" style={{ background: "var(--bg-2)", padding: 12, marginBottom: 8 }}>
+          <span className="mono" style={{ fontWeight: 700 }}>{qr.qrId}</span> — Type: {qr.type}
         </div>
       ))}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+function SideQuests({ token, run }) {
+  return (
+    <div className="card">
+      <h3 style={{ color: "var(--gold)" }}>🎯 Event Side Quests</h3>
+      <p className="muted">Manage optional side quests and secret code fragment rewards.</p>
     </div>
   );
 }
@@ -676,25 +458,11 @@ function Audit({ token, run }) {
 
   return (
     <div className="card">
-      <h3 style={{ fontFamily: "var(--font-heading)", color: "var(--gold)" }}>
-        📋 Activity Log ({logs.length})
-      </h3>
-      {logs.length === 0 && <p className="muted">No entries in the activity log yet.</p>}
+      <h3 style={{ color: "var(--gold)" }}>📋 Activity Log ({logs.length})</h3>
       <ul className="list">
         {logs.map((l) => (
           <li key={l._id}>
-            <span className="row" style={{ justifyContent: "space-between" }}>
-              <span>
-                <span className="pill info">{l.action}</span>{" "}
-                <span className="muted mono" style={{ fontSize: 12 }}>
-                  {l.targetType} {l.targetId}
-                </span>
-              </span>
-              <span className="muted" style={{ fontSize: 12 }}>
-                {l.adminName} · {new Date(l.createdAt).toLocaleString()}
-              </span>
-            </span>
-            {l.note && <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>{l.note}</div>}
+            <span className="pill info">{l.action}</span> {l.note}
           </li>
         ))}
       </ul>
