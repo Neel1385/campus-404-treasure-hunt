@@ -19,6 +19,7 @@ export default function Admin() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [selectedEventId, setSelectedEventId] = useState("");
 
   if (!admin?.token) return <Navigate to="/admin/login" replace />;
 
@@ -143,12 +144,20 @@ export default function Admin() {
         {error && <div className="alert error" style={{ marginBottom: 16 }}>{error}</div>}
         {notice && <div className="alert success" style={{ marginBottom: 16 }}>{notice}</div>}
 
-        {tab === "overview" && <Overview token={token} run={run} flash={flash} />}
-        {tab === "teams" && <Teams token={token} run={run} flash={flash} />}
-        {tab === "clues" && <Clues token={token} run={run} flash={flash} />}
-        {tab === "qrs" && <QRCodes token={token} run={run} flash={flash} />}
-        {tab === "sidequests" && <SideQuests token={token} run={run} flash={flash} />}
-        {tab === "audit" && <Audit token={token} run={run} />}
+        {tab === "overview" && (
+          <Overview
+            token={token}
+            run={run}
+            flash={flash}
+            selectedEventId={selectedEventId}
+            setSelectedEventId={setSelectedEventId}
+          />
+        )}
+        {tab === "teams" && <Teams token={token} run={run} flash={flash} eventId={selectedEventId} />}
+        {tab === "clues" && <Clues token={token} run={run} flash={flash} eventId={selectedEventId} />}
+        {tab === "qrs" && <QRCodes token={token} run={run} flash={flash} eventId={selectedEventId} />}
+        {tab === "sidequests" && <SideQuests token={token} run={run} flash={flash} eventId={selectedEventId} />}
+        {tab === "audit" && <Audit token={token} run={run} eventId={selectedEventId} />}
       </main>
     </div>
   );
@@ -156,9 +165,8 @@ export default function Admin() {
 
 /* ------------------------------------------------------------------ */
 
-function Overview({ token, run, flash }) {
+function Overview({ token, run, flash, selectedEventId, setSelectedEventId }) {
   const [events, setEvents] = useState([]);
-  const [selectedEventId, setSelectedEventId] = useState("");
   const [stats, setStats] = useState(null);
   const [event, setEvent] = useState(null);
   const [settingsDraft, setSettingsDraft] = useState(null);
@@ -170,7 +178,7 @@ function Overview({ token, run, flash }) {
     if (list.length > 0 && !selectedEventId) {
       setSelectedEventId(list[0]._id);
     }
-  }, [token, selectedEventId]);
+  }, [token, selectedEventId, setSelectedEventId]);
 
   useEffect(() => {
     loadEvents().catch(() => {});
@@ -206,6 +214,12 @@ function Overview({ token, run, flash }) {
     loadEvents().catch(() => {});
   };
 
+  const generateAssignments = async () => {
+    if (!selectedEventId) return;
+    const res = await run(() => api.post(`/events/${selectedEventId}/generate-assignments`, {}, { token }));
+    flash(`Generated clue assignments for ${res.teamsProcessed || 0} team(s)!`);
+  };
+
   const saveSettings = async (e) => {
     e.preventDefault();
     if (!selectedEventId) return;
@@ -226,9 +240,14 @@ function Overview({ token, run, flash }) {
               Manage multiple independent campus hunt events from a single admin panel.
             </p>
           </div>
-          <button className="btn small ok" onClick={createNewEvent}>
-            + Create Event
-          </button>
+          <div className="row" style={{ gap: 8 }}>
+            <button className="btn small secondary" onClick={generateAssignments}>
+              🎲 Generate Clue Assignments
+            </button>
+            <button className="btn small ok" onClick={createNewEvent}>
+              + Create Event
+            </button>
+          </div>
         </div>
 
         <div className="row" style={{ marginTop: 12, gap: 12 }}>
@@ -334,16 +353,17 @@ function Overview({ token, run, flash }) {
 
 /* ------------------------------------------------------------------ */
 
-function Teams({ token, run, flash }) {
+function Teams({ token, run, flash, eventId }) {
   const [teams, setTeams] = useState([]);
   const [search, setSearch] = useState("");
   const [pointsMap, setPointsMap] = useState({});
   const [unlockMap, setUnlockMap] = useState({});
 
   const load = useCallback(async () => {
-    const data = await run(() => api.get("/admin/teams", { token }));
+    const query = eventId ? `?eventId=${eventId}` : "";
+    const data = await run(() => api.get(`/admin/teams${query}`, { token }));
     setTeams(data.teams || []);
-  }, [token]);
+  }, [token, eventId]);
 
   useEffect(() => {
     load().catch(() => {});
@@ -430,7 +450,7 @@ function Teams({ token, run, flash }) {
 
 /* ------------------------------------------------------------------ */
 
-function Clues({ token, run, flash }) {
+function Clues({ token, run, flash, eventId }) {
   const [clues, setClues] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
@@ -443,9 +463,10 @@ function Clues({ token, run, flash }) {
   });
 
   const load = useCallback(async () => {
-    const data = await run(() => api.get("/admin/clues", { token }));
+    const query = eventId ? `?eventId=${eventId}` : "";
+    const data = await run(() => api.get(`/admin/clues${query}`, { token }));
     setClues(data.clues || []);
-  }, [token]);
+  }, [token, eventId]);
 
   useEffect(() => {
     load().catch(() => {});
@@ -453,10 +474,12 @@ function Clues({ token, run, flash }) {
 
   const create = async (e) => {
     e.preventDefault();
+    const query = eventId ? `?eventId=${eventId}` : "";
     await run(() =>
       api.post(
-        "/admin/clues",
+        `/admin/clues${query}`,
         {
+          eventId,
           clueNumber: Number(form.clueNumber),
           title: form.title,
           description: form.description,
@@ -515,19 +538,20 @@ function Clues({ token, run, flash }) {
 
 /* ------------------------------------------------------------------ */
 
-function QRCodes({ token, run, flash }) {
+function QRCodes({ token, run, flash, eventId }) {
   const [qrs, setQrs] = useState([]);
   const [clues, setClues] = useState([]);
   const [selectedClue, setSelectedClue] = useState("");
 
   const load = useCallback(async () => {
+    const query = eventId ? `?eventId=${eventId}` : "";
     const [qrData, clueData] = await Promise.all([
-      run(() => api.get("/admin/qrcodes", { token })),
-      run(() => api.get("/admin/clues", { token })),
+      run(() => api.get(`/admin/qrcodes${query}`, { token })),
+      run(() => api.get(`/admin/clues${query}`, { token })),
     ]);
     setQrs(qrData.qrcodes || []);
     setClues(clueData.clues || []);
-  }, [token]);
+  }, [token, eventId]);
 
   useEffect(() => {
     load().catch(() => {});
@@ -535,7 +559,8 @@ function QRCodes({ token, run, flash }) {
 
   const generate = async () => {
     if (!selectedClue) return flash("Select a clue first");
-    await run(() => api.post("/admin/qrcodes/generate", { clueId: selectedClue }, { token }));
+    const query = eventId ? `?eventId=${eventId}` : "";
+    await run(() => api.post(`/admin/qrcodes/generate${query}`, { clueId: selectedClue, eventId }, { token }));
     flash("QR Code generated");
     load().catch(() => {});
   };
@@ -577,7 +602,7 @@ function QRCodes({ token, run, flash }) {
 
 /* ------------------------------------------------------------------ */
 
-function SideQuests({ token, run, flash }) {
+function SideQuests({ token, run, flash, eventId }) {
   const [quests, setQuests] = useState([]);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -586,13 +611,10 @@ function SideQuests({ token, run, flash }) {
   const [secretCodeReward, setSecretCodeReward] = useState("");
 
   const load = useCallback(async () => {
-    const data = await run(() => api.get("/events"));
-    const firstEv = data?.[0];
-    if (firstEv) {
-      const qData = await run(() => api.get(`/events/${firstEv._id}/side-quests`, { token }));
-      setQuests(qData || []);
-    }
-  }, [token]);
+    if (!eventId) return;
+    const qData = await run(() => api.get(`/events/${eventId}/side-quests`, { token }));
+    setQuests(qData || []);
+  }, [token, eventId]);
 
   useEffect(() => {
     load().catch(() => {});
@@ -600,12 +622,10 @@ function SideQuests({ token, run, flash }) {
 
   const create = async (e) => {
     e.preventDefault();
-    const data = await run(() => api.get("/events"));
-    const firstEv = data?.[0];
-    if (!firstEv) return;
+    if (!eventId) return;
 
-    await run(() => api.post(`/events/${firstEv._id}/side-quests`, {
-      title, description, points: Number(points), answer, secretCodeReward
+    await run(() => api.post(`/events/${eventId}/side-quests`, {
+      eventId, title, description, points: Number(points), answer, secretCodeReward
     }, { token }));
 
     flash("Side quest created!");
@@ -638,14 +658,15 @@ function SideQuests({ token, run, flash }) {
 
 /* ------------------------------------------------------------------ */
 
-function Audit({ token, run }) {
+function Audit({ token, run, eventId }) {
   const [logs, setLogs] = useState([]);
 
   useEffect(() => {
-    run(() => api.get("/admin/audit", { token }))
+    const query = eventId ? `?eventId=${eventId}` : "";
+    run(() => api.get(`/admin/audit${query}`, { token }))
       .then((data) => setLogs(data.logs || []))
       .catch(() => {});
-  }, [token]);
+  }, [token, eventId]);
 
   return (
     <div className="card">
