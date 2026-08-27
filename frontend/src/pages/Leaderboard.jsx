@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
+import { useEvent } from "../EventContext.jsx";
 
 const ISLAND_ICONS = ["", "🏝️", "🌊", "☁️", "⚔️", "🏰", "🏴‍☠️"];
 
@@ -19,15 +20,20 @@ function rankEmoji(rank) {
 
 export default function Leaderboard() {
   const { team } = useAuth();
+  const { currentEvent } = useEvent();
   const [board, setBoard] = useState([]);
   const [error, setError] = useState("");
 
   useEffect(() => {
+    const endpoint = currentEvent?._id ? `/events/${currentEvent._id}/leaderboard` : "/leaderboard";
     api
-      .get("/leaderboard")
-      .then((data) => setBoard(data.leaderboard || []))
+      .get(endpoint)
+      .then((data) => {
+        const list = Array.isArray(data) ? data : data.leaderboard || [];
+        setBoard(list);
+      })
       .catch(() => setError("Could not load the leaderboard."));
-  }, []);
+  }, [currentEvent]);
 
   return (
     <div>
@@ -35,7 +41,7 @@ export default function Leaderboard() {
         <div style={{ textAlign: "center", marginBottom: 24 }}>
           <div style={{ fontSize: 48, marginBottom: 8 }}>💰</div>
           <h1 style={{ fontFamily: "var(--font-display)", color: "var(--gold)", margin: 0 }}>
-            LEADERBOARD
+            LEADERBOARD {currentEvent ? `— ${currentEvent.name}` : ""}
           </h1>
           <p className="muted" style={{ fontFamily: "var(--font-parchment)", fontStyle: "italic", fontSize: 16 }}>
             The top treasure hunters on the leaderboard
@@ -81,7 +87,7 @@ export default function Leaderboard() {
                       )}
                     </td>
                     <td className="mono">
-                      {ISLAND_ICONS[t.currentLevel || 1]} {t.currentLevel || 1}
+                      {ISLAND_ICONS[t.currentLevel || 1] || "🏝️"} {t.currentLevel || 1}
                     </td>
                     <td className="muted">{t.progress} decoded</td>
                     <td className="muted mono">{t.completed ? fmtTime(t.completionTime) : "—"}</td>

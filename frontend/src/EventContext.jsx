@@ -1,10 +1,16 @@
 import { createContext, useContext, useState, useEffect } from "react";
-import { api } from "./api";
+import { api, EVENT_KEY } from "./api.js";
 
 const EventContext = createContext();
 
 export function EventProvider({ children }) {
-  const [currentEvent, setCurrentEvent] = useState(null);
+  const [currentEvent, setCurrentEvent] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem(EVENT_KEY) || "null");
+    } catch {
+      return null;
+    }
+  });
   const [eventsList, setEventsList] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -20,18 +26,22 @@ export function EventProvider({ children }) {
 
   const selectEvent = (event) => {
     setCurrentEvent(event);
-    if (event && event.theme) {
-      applyTheme(event.theme);
+    if (event) {
+      localStorage.setItem(EVENT_KEY, JSON.stringify(event));
+      if (event.theme) applyTheme(event.theme);
+    } else {
+      localStorage.removeItem(EVENT_KEY);
     }
   };
 
   const loadEvents = async () => {
     try {
       const res = await api.get("/events");
-      if (res.success && res.data.length > 0) {
-        setEventsList(res.data);
+      const list = Array.isArray(res) ? res : res.data || [];
+      if (list.length > 0) {
+        setEventsList(list);
         if (!currentEvent) {
-          selectEvent(res.data[0]);
+          selectEvent(list[0]);
         }
       }
     } catch (err) {

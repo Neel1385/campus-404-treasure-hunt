@@ -5,6 +5,7 @@ const API_BASE = (import.meta.env.VITE_API_URL || "/api").replace(/\/$/, "");
 
 export const PLAYER_KEY = "campus404:player";
 export const ADMIN_KEY = "campus404:admin";
+export const EVENT_KEY = "campus404:current_event";
 
 export function readPlayer() {
   try {
@@ -38,11 +39,27 @@ export function clearAdmin() {
   localStorage.removeItem(ADMIN_KEY);
 }
 
+export function readCurrentEventId() {
+  try {
+    const ev = JSON.parse(localStorage.getItem(EVENT_KEY) || "null");
+    return ev ? ev._id : null;
+  } catch {
+    return null;
+  }
+}
+
 async function http(path, { method = "GET", body, token } = {}) {
   const headers = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(`${API_BASE}${path}`, {
+  const currentEventId = readCurrentEventId();
+  let fullPath = path;
+  if (currentEventId && !path.includes("eventId=")) {
+    const separator = path.includes("?") ? "&" : "?";
+    fullPath = `${path}${separator}eventId=${currentEventId}`;
+  }
+
+  const res = await fetch(`${API_BASE}${fullPath}`, {
     method,
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),

@@ -1,6 +1,7 @@
 import { lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "./auth.jsx";
+import { EventProvider } from "./EventContext.jsx";
 import Sidebar from "./Sidebar.jsx";
 import Home from "./pages/Home.jsx";
 import Register from "./pages/Register.jsx";
@@ -13,8 +14,6 @@ import LevelMap from "./pages/GrandLineMap.jsx";
 import ScoreHistory from "./pages/BountyHistory.jsx";
 import HowToPlay from "./pages/HowToPlay.jsx";
 
-// Lazy-loaded: html5-qrcode is heavy, so the camera scanner bundle is only
-// downloaded when a player actually opens the scan page.
 const Scan = lazy(() => import("./pages/Scan.jsx"));
 
 function Lazy({ children }) {
@@ -33,7 +32,7 @@ export default function App() {
   const isAdmin = location.pathname.startsWith("/admin");
 
   return (
-    <>
+    <EventProvider>
       {!isAdmin && <Sidebar />}
       <Routes>
         <Route path="/" element={<Home />} />
@@ -79,6 +78,6 @@ export default function App() {
         <Route path="/how-to-play" element={<HowToPlay />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-    </>
+    </EventProvider>
   );
 }
