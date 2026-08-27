@@ -38,6 +38,90 @@ async function checkTeamBlocked(team) {
   }
 }
 
+// --- Bulk Team Generation ---
+async function bulkGenerateTeams(eventId, count = 5, prefix = "TEAM", adminTeam) {
+  const generated = [];
+  const event = await eventService.getEventById(eventId);
+
+  for (let i = 1; i <= count; i++) {
+    let teamId;
+    do {
+      teamId = `${prefix}-${Math.random().toString(36).slice(2, 6).toUpperCase()}${Math.floor(Math.random() * 10)}`;
+    } while (await Team.findOne({ eventId, teamId }));
+
+    const rawPassword = `pass_${Math.random().toString(36).slice(2, 8)}`;
+    const teamName = `Team ${prefix} #${i}`;
+
+    const team = await Team.create({
+      eventId,
+      teamId,
+      teamName,
+      passwordHash: rawPassword,
+      role: "player",
+      members: [
+        { fullName: `Leader ${i}`, collegeId: `ID-L${i}` },
+        { fullName: `Member A${i}`, collegeId: `ID-A${i}` },
+        { fullName: `Member B${i}`, collegeId: `ID-B${i}` },
+      ],
+    });
+
+    generated.push({
+      id: team._id,
+      teamId: team.teamId,
+      teamName: team.teamName,
+      password: rawPassword,
+    });
+  }
+
+  await AuditLog.create({
+    eventId,
+    adminId: adminTeam ? adminTeam._id : undefined,
+    adminName: adminTeam ? adminTeam.teamName : "Admin",
+    action: "BULK_TEAMS_GENERATED",
+    note: `Generated ${generated.length} teams for event ${event.name}`,
+  });
+
+  return generated;
+}
+
+// --- Final Secret Code Try ---
+async function tryFinalSecretCode(eventId, team, inputSecretCode) {
+  const event = await eventService.getEventById(eventId);
+  const settings = event.settings || {};
+  const expectedCode = String(settings.finalSecretCode || "CAMPUS404").trim().toUpperCase();
+  const enteredCode = String(inputSecretCode || "").trim().toUpperCase();
+
+  if (enteredCode !== expectedCode) {
+    return { success: false, correct: false, message: "Incorrect secret code. Check your side quest code fragments!" };
+  }
+
+  const bonusPoints = Number(settings.finalChallengePoints) || 100;
+  if (bonusPoints > 0) {
+    const { newPoints } = await scoreService.recordTransaction(
+      team._id,
+      SCORE_TRANSACTION_TYPE.FINAL_CHALLENGE,
+      bonusPoints,
+      { eventId, reason: "Physical Final Treasure Chest Unlocked!" }
+    );
+    team.points = newPoints;
+  }
+
+  team.status = TEAM_STATUS.COMPLETED;
+  team.endTime = new Date();
+  team.finalScore = team.points;
+  await team.save();
+
+  broadcastLeaderboardUpdate(eventId);
+  eventBus.publish(DOMAIN_EVENTS.FINAL_CHALLENGE_COMPLETED, { eventId, teamId: team._id, finalScore: team.finalScore });
+
+  return {
+    success: true,
+    correct: true,
+    message: `PHYSICAL TREASURE UNLOCKED! +${bonusPoints} Bonus Treasure Bounty!`,
+    totalPoints: team.points,
+  };
+}
+
 // --- Randomized Clue Assignments ---
 async function generateRandomClueAssignments(eventId) {
   const event = await eventService.getEventById(eventId);
@@ -557,7 +641,7 @@ async function completeSideQuest(eventId, team, questId, answer) {
     throw new Error("Side quest not found or disabled.");
   }
 
-  if (team.completedSideQuests.includes(quest._id)) {
+  if (team.completedSideQuests.some((id) => String(id) === String(quest._id))) {
     throw new Error("Side quest already completed.");
   }
 
@@ -711,6 +795,8 @@ module.exports = {
   processQRScan,
   submitAnswer,
   useHint,
+  bulkGenerateTeams,
+  tryFinalSecretCode,
   generateRandomClueAssignments,
   completeSideQuest,
   adminAdjustScore,

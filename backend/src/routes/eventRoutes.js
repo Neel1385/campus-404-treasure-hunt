@@ -62,23 +62,33 @@ router.delete("/:eventId", protect, adminOnly, enforceEventIsolation, async (req
   }
 });
 
-// Lifecycle transitions: start, pause, resume, end
 router.post("/:eventId/status", protect, adminOnly, enforceEventIsolation, async (req, res, next) => {
   try {
     const { status } = req.body;
-    const event = await eventService.setEventStatus(req.params.eventId, status, req.team);
+    const event = await eventService.setEventStatus(req.team, status, req.params.eventId);
     res.json({ success: true, data: event });
   } catch (err) {
     next(err);
   }
 });
 
-// --- Event Scoped Teams ---
+// --- Event Scoped Teams & Bulk Team Generation ---
 
 router.get("/:eventId/teams", protect, enforceEventIsolation, async (req, res, next) => {
   try {
     const teams = await Team.find({ eventId: req.params.eventId, role: "player" });
     res.json({ success: true, data: teams });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post("/:eventId/bulk-teams", protect, adminOnly, enforceEventIsolation, async (req, res, next) => {
+  try {
+    const count = Number(req.body.count) || 5;
+    const prefix = String(req.body.prefix || "TEAM").trim();
+    const result = await gameService.bulkGenerateTeams(req.params.eventId, count, prefix, req.team);
+    res.json({ success: true, data: result });
   } catch (err) {
     next(err);
   }
@@ -104,7 +114,7 @@ router.post("/:eventId/teams/score", protect, adminOnly, enforceEventIsolation, 
   }
 });
 
-// --- Event Scoped Clues & Assignments ---
+// --- Event Scoped Clues, Bulk Upload & Assignments ---
 
 router.get("/:eventId/clues", protect, enforceEventIsolation, async (req, res, next) => {
   try {
@@ -124,6 +134,27 @@ router.post("/:eventId/clues", protect, adminOnly, enforceEventIsolation, async 
   }
 });
 
+router.post("/:eventId/clues/bulk", protect, adminOnly, enforceEventIsolation, async (req, res, next) => {
+  try {
+    const cluesArray = Array.isArray(req.body.clues) ? req.body.clues : [];
+    const created = [];
+    for (const item of cluesArray) {
+      const clue = await Clue.create({ ...item, eventId: req.params.eventId });
+      created.push(clue);
+    }
+    await AuditLog.create({
+      eventId: req.params.eventId,
+      adminId: req.team._id,
+      adminName: req.team.teamName,
+      action: "BULK_CLUES_CREATED",
+      note: `Bulk imported ${created.length} clues`,
+    });
+    res.status(201).json({ success: true, data: { count: created.length, clues: created } });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post("/:eventId/generate-assignments", protect, adminOnly, enforceEventIsolation, async (req, res, next) => {
   try {
     const result = await gameService.generateRandomClueAssignments(req.params.eventId);
@@ -133,7 +164,7 @@ router.post("/:eventId/generate-assignments", protect, adminOnly, enforceEventIs
   }
 });
 
-// --- Event Scoped Side Quests ---
+// --- Event Scoped Side Quests & Bulk Upload ---
 
 router.get("/:eventId/side-quests", protect, enforceEventIsolation, async (req, res, next) => {
   try {
@@ -153,6 +184,27 @@ router.post("/:eventId/side-quests", protect, adminOnly, enforceEventIsolation, 
   }
 });
 
+router.post("/:eventId/side-quests/bulk", protect, adminOnly, enforceEventIsolation, async (req, res, next) => {
+  try {
+    const questsArray = Array.isArray(req.body.quests) ? req.body.quests : [];
+    const created = [];
+    for (const item of questsArray) {
+      const quest = await SideQuest.create({ ...item, eventId: req.params.eventId });
+      created.push(quest);
+    }
+    await AuditLog.create({
+      eventId: req.params.eventId,
+      adminId: req.team._id,
+      adminName: req.team.teamName,
+      action: "BULK_SIDE_QUESTS_CREATED",
+      note: `Bulk imported ${created.length} side quests`,
+    });
+    res.status(201).json({ success: true, data: { count: created.length, quests: created } });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post("/:eventId/side-quests/:questId/complete", protect, enforceEventIsolation, async (req, res, next) => {
   try {
     const { answer } = req.body;
@@ -163,7 +215,19 @@ router.post("/:eventId/side-quests/:questId/complete", protect, enforceEventIsol
   }
 });
 
-// --- Event Scoped Leaderboard & Audit ---
+// --- Final Secret Code Physical Challenge ---
+
+router.post("/:eventId/final-challenge/try-code", protect, enforceEventIsolation, async (req, res, next) => {
+  try {
+    const { secretCode } = req.body;
+    const result = await gameService.tryFinalSecretCode(req.params.eventId, req.team, secretCode);
+    res.json({ success: true, data: result });
+  } catch (err) {
+    next(err);
+  }
+});
+
+// --- Event Scoped Leaderboard & Filtered Audit Logs ---
 
 router.get("/:eventId/leaderboard", protect, enforceEventIsolation, async (req, res, next) => {
   try {
@@ -177,7 +241,18 @@ router.get("/:eventId/leaderboard", protect, enforceEventIsolation, async (req, 
 
 router.get("/:eventId/audit-logs", protect, adminOnly, enforceEventIsolation, async (req, res, next) => {
   try {
-    const logs = await AuditLog.find({ eventId: req.params.eventId }).sort({ createdAt: -1 });
+    const { action, search } = req.query;
+    const query = { eventId: req.params.eventId };
+    if (action) query.action = action;
+    if (search) {
+      const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      query.$or = [
+        { note: { $regex: escaped, $options: "i" } },
+        { adminName: { $regex: escaped, $options: "i" } },
+        { targetId: { $regex: escaped, $options: "i" } },
+      ];
+    }
+    const logs = await AuditLog.find(query).sort({ createdAt: -1 });
     res.json({ success: true, data: logs });
   } catch (err) {
     next(err);
