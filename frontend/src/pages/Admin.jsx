@@ -443,6 +443,25 @@ function Teams({ token, run, flash, eventId }) {
   const [unlockMap, setUnlockMap] = useState({});
   const [bulkCount, setBulkCount] = useState(5);
   const [generatedTeams, setGeneratedTeams] = useState(null);
+  const [showAddTeam, setShowAddTeam] = useState(false);
+  const [newTeamName, setNewTeamName] = useState("");
+  const [newTeamId, setNewTeamId] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+
+  const handleAddSingleTeam = async (e) => {
+    e.preventDefault();
+    await run(() => api.post(`/events/${eventId}/teams`, {
+      teamName: newTeamName,
+      teamId: newTeamId,
+      password: newPassword,
+    }, { token }));
+    flash(`Team "${newTeamName}" registered!`);
+    setShowAddTeam(false);
+    setNewTeamName("");
+    setNewTeamId("");
+    setNewPassword("");
+    load().catch(() => {});
+  };
 
   const handleBulkGenerate = async () => {
     const res = await run(() => api.post(`/events/${eventId}/bulk-teams`, { count: Number(bulkCount) }, { token }));
@@ -472,6 +491,9 @@ function Teams({ token, run, flash, eventId }) {
       <div className="spread" style={{ marginBottom: 12 }}>
         <h3 style={{ margin: 0, color: "var(--gold)" }}>🏴‍☠️ Registered Teams ({teams.length})</h3>
         <div className="row" style={{ gap: 8 }}>
+          <button className="btn small ok" onClick={() => setShowAddTeam(!showAddTeam)}>
+            {showAddTeam ? "Cancel" : "+ Add Single Team"}
+          </button>
           <input
             type="number"
             min="1"
@@ -491,6 +513,16 @@ function Teams({ token, run, flash, eventId }) {
           />
         </div>
       </div>
+
+      {showAddTeam && (
+        <form onSubmit={handleAddSingleTeam} style={{ background: "var(--bg-2)", padding: 12, borderRadius: 6, marginBottom: 16 }}>
+          <h4 style={{ margin: "0 0 12px", color: "var(--gold)" }}>+ Add Individual Team</h4>
+          <div className="field"><label>Team Name</label><input value={newTeamName} onChange={(e) => setNewTeamName(e.target.value)} required /></div>
+          <div className="field"><label>Team ID (Unique)</label><input value={newTeamId} onChange={(e) => setNewTeamId(e.target.value)} placeholder="e.g. TEAM-DRAGON" required /></div>
+          <div className="field"><label>Password</label><input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required /></div>
+          <button className="btn small" type="submit" style={{ marginTop: 8 }}>Register Team</button>
+        </form>
+      )}
 
       {generatedTeams && (
         <div className="card" style={{ background: "var(--bg-2)", marginBottom: 16 }}>
@@ -660,27 +692,67 @@ function Clues({ token, run, flash, eventId }) {
 
       {showBulk && (
         <div style={{ marginBottom: 16, background: "var(--bg-2)", padding: 12, borderRadius: 6 }}>
-          <h4>⚡ Bulk Upload Clues (JSON Array)</h4>
+          <div className="spread">
+            <h4 style={{ margin: 0 }}>⚡ Bulk Upload Clues (JSON or CSV/Excel)</h4>
+            <div className="row" style={{ gap: 6 }}>
+              <button
+                type="button"
+                className="btn small ghost"
+                onClick={() => setBulkJson(JSON.stringify([
+                  { clueNumber: 1, title: "Library Secret", description: "Look under desk 3", checkpointName: "Library", correctAnswer: "BOOK", points: 10 },
+                  { clueNumber: 2, title: "Lab Cipher", description: "Read the periodic table", checkpointName: "Science Lab", correctAnswer: "NEON", points: 15 }
+                ], null, 2))}
+              >
+                📄 Demo JSON
+              </button>
+              <button
+                type="button"
+                className="btn small ghost"
+                onClick={() => setBulkJson("clueNumber,title,description,checkpointName,correctAnswer,points\n1,Library Secret,Look under desk 3,Library,BOOK,10\n2,Lab Cipher,Read the periodic table,Science Lab,NEON,15")}
+              >
+                📊 Demo CSV
+              </button>
+            </div>
+          </div>
+
           <textarea
-            rows={5}
-            placeholder='[{"clueNumber": 1, "title": "Library Secret", "description": "Look under desk", "checkpointName": "Library", "correctAnswer": "BOOK"}]'
+            rows={6}
+            placeholder="Paste JSON array or CSV text here..."
             value={bulkJson}
             onChange={(e) => setBulkJson(e.target.value)}
-            style={{ width: "100%", fontFamily: "monospace", fontSize: 13 }}
+            style={{ width: "100%", fontFamily: "monospace", fontSize: 13, marginTop: 8 }}
           />
           <button
             className="btn small"
             style={{ marginTop: 8 }}
             onClick={async () => {
               try {
-                const parsed = JSON.parse(bulkJson);
+                let parsed = [];
+                const trimmed = bulkJson.trim();
+                if (trimmed.startsWith("[")) {
+                  parsed = JSON.parse(trimmed);
+                } else {
+                  // CSV Parser
+                  const lines = trimmed.split("\n").map((l) => l.trim()).filter(Boolean);
+                  const headers = lines[0].split(",").map((h) => h.trim());
+                  parsed = lines.slice(1).map((line) => {
+                    const values = line.split(",").map((v) => v.trim());
+                    const obj = {};
+                    headers.forEach((h, idx) => {
+                      let val = values[idx] || "";
+                      if (h === "clueNumber" || h === "points") val = Number(val);
+                      obj[h] = val;
+                    });
+                    return obj;
+                  });
+                }
                 const res = await run(() => api.post(`/events/${eventId}/clues/bulk`, { clues: parsed }, { token }));
                 flash(`Bulk uploaded ${res.inserted || res.length || "clues"} clues!`);
                 setShowBulk(false);
                 setBulkJson("");
                 load().catch(() => {});
               } catch (err) {
-                flash(`Invalid JSON: ${err.message}`);
+                flash(`Parse / Upload Error: ${err.message}`);
               }
             }}
           >
@@ -756,11 +828,20 @@ function QRCodes({ token, run, flash, eventId }) {
     load().catch(() => {});
   }, [load]);
 
+  const [logoUrl, setLogoUrl] = useState("");
+  const [customText, setCustomText] = useState("");
+
   const generate = async () => {
     if (!selectedClue) return flash("Select a clue first");
     const query = eventId ? `?eventId=${eventId}` : "";
-    await run(() => api.post(`/admin/qrcodes/generate${query}`, { clueId: selectedClue, eventId }, { token }));
-    flash("QR Code generated");
+    await run(() => api.post(`/admin/qrcodes/generate${query}`, {
+      clueId: selectedClue,
+      eventId,
+      branding: { logo: logoUrl, customText }
+    }, { token }));
+    flash("QR Code generated with custom branding");
+    setLogoUrl("");
+    setCustomText("");
     load().catch(() => {});
   };
 
@@ -773,12 +854,44 @@ function QRCodes({ token, run, flash, eventId }) {
   return (
     <div className="card">
       <div className="spread" style={{ marginBottom: 12 }}>
-        <h3 style={{ color: "var(--gold)", margin: 0 }}>🗺️ Event QR Codes ({qrs.length})</h3>
+        <div className="row" style={{ gap: 12 }}>
+          <h3 style={{ color: "var(--gold)", margin: 0 }}>🗺️ Event QR Codes ({qrs.length})</h3>
+          <button
+            className="btn small secondary"
+            onClick={() => {
+              const csvContent = "data:text/csv;charset=utf-8," +
+                ["QR ID,Type,Checkpoint,Scan Count,Active"]
+                  .concat(qrs.map((q) => `${q.qrId},${q.type},${q.checkpointName || ""},${q.scanCount || 0},${q.active}`))
+                  .join("\n");
+              const encodedUri = encodeURI(csvContent);
+              const link = document.createElement("a");
+              link.setAttribute("href", encodedUri);
+              link.setAttribute("download", `event_${eventId}_qrcodes.csv`);
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+            }}
+          >
+            📥 Download All QR Codes
+          </button>
+        </div>
         <div className="row" style={{ gap: 8 }}>
           <select value={selectedClue} onChange={(e) => setSelectedClue(e.target.value)}>
             <option value="">— Select Clue —</option>
             {clues.map((c) => <option key={c._id} value={c._id}>#{c.clueNumber} {c.title}</option>)}
           </select>
+          <input
+            placeholder="Logo Image URL..."
+            value={logoUrl}
+            onChange={(e) => setLogoUrl(e.target.value)}
+            style={{ width: 140 }}
+          />
+          <input
+            placeholder="Overlay Description Text..."
+            value={customText}
+            onChange={(e) => setCustomText(e.target.value)}
+            style={{ width: 160 }}
+          />
           <button className="btn small" onClick={generate}>Generate QR</button>
         </div>
       </div>
@@ -854,27 +967,66 @@ function SideQuests({ token, run, flash, eventId }) {
 
       {showBulk && (
         <div style={{ marginBottom: 16, background: "var(--bg-2)", padding: 12, borderRadius: 6 }}>
-          <h4>⚡ Bulk Upload Side Quests (JSON Array)</h4>
+          <div className="spread">
+            <h4 style={{ margin: 0 }}>⚡ Bulk Upload Side Quests (JSON or CSV/Excel)</h4>
+            <div className="row" style={{ gap: 6 }}>
+              <button
+                type="button"
+                className="btn small ghost"
+                onClick={() => setBulkJson(JSON.stringify([
+                  { title: "Library Riddle", description: "What has keys but no locks?", points: 25, answer: "piano", secretCodeReward: "X7" },
+                  { title: "Math Challenge", description: "Solve 12 x 12", points: 20, answer: "144", secretCodeReward: "K9" }
+                ], null, 2))}
+              >
+                📄 Demo JSON
+              </button>
+              <button
+                type="button"
+                className="btn small ghost"
+                onClick={() => setBulkJson("title,description,points,answer,secretCodeReward\nLibrary Riddle,What has keys but no locks?,25,piano,X7\nMath Challenge,Solve 12 x 12,20,144,K9")}
+              >
+                📊 Demo CSV
+              </button>
+            </div>
+          </div>
+
           <textarea
-            rows={5}
-            placeholder='[{"title": "Riddle 1", "description": "What has keys but no locks?", "points": 25, "answer": "piano", "secretCodeReward": "X7"}]'
+            rows={6}
+            placeholder="Paste JSON array or CSV text here..."
             value={bulkJson}
             onChange={(e) => setBulkJson(e.target.value)}
-            style={{ width: "100%", fontFamily: "monospace", fontSize: 13 }}
+            style={{ width: "100%", fontFamily: "monospace", fontSize: 13, marginTop: 8 }}
           />
           <button
             className="btn small"
             style={{ marginTop: 8 }}
             onClick={async () => {
               try {
-                const parsed = JSON.parse(bulkJson);
+                let parsed = [];
+                const trimmed = bulkJson.trim();
+                if (trimmed.startsWith("[")) {
+                  parsed = JSON.parse(trimmed);
+                } else {
+                  const lines = trimmed.split("\n").map((l) => l.trim()).filter(Boolean);
+                  const headers = lines[0].split(",").map((h) => h.trim());
+                  parsed = lines.slice(1).map((line) => {
+                    const values = line.split(",").map((v) => v.trim());
+                    const obj = {};
+                    headers.forEach((h, idx) => {
+                      let val = values[idx] || "";
+                      if (h === "points") val = Number(val);
+                      obj[h] = val;
+                    });
+                    return obj;
+                  });
+                }
                 const res = await run(() => api.post(`/events/${eventId}/side-quests/bulk`, { quests: parsed }, { token }));
                 flash(`Bulk uploaded ${res.inserted || res.length || "quests"} side quests!`);
                 setShowBulk(false);
                 setBulkJson("");
                 load().catch(() => {});
               } catch (err) {
-                flash(`Invalid JSON: ${err.message}`);
+                flash(`Parse / Upload Error: ${err.message}`);
               }
             }}
           >

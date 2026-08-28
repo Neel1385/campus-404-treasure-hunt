@@ -23,6 +23,7 @@ export default function Leaderboard() {
   const { currentEvent } = useEvent();
   const [board, setBoard] = useState([]);
   const [error, setError] = useState("");
+  const [selectedTeam, setSelectedTeam] = useState(null);
 
   useEffect(() => {
     const endpoint = currentEvent?._id ? `/events/${currentEvent._id}/leaderboard` : "/leaderboard";
@@ -73,10 +74,16 @@ export default function Leaderboard() {
               </thead>
               <tbody>
                 {board.map((t) => (
-                  <tr key={t.teamId} className={team && t.teamId === team.teamId ? "me" : ""}>
+                  <tr
+                    key={t.teamId}
+                    className={team && t.teamId === team.teamId ? "me" : ""}
+                    onClick={() => setSelectedTeam(t)}
+                    style={{ cursor: "pointer" }}
+                    title="Click to inspect team details"
+                  >
                     <td className="rank">{rankEmoji(t.rank)}</td>
                     <td>
-                      <strong>{t.teamName}</strong>{" "}
+                      <strong style={{ color: "var(--gold)" }}>{t.teamName}</strong>{" "}
                       <span className="muted mono" style={{ fontSize: 12 }}>
                         ({t.teamId})
                       </span>
@@ -98,6 +105,59 @@ export default function Leaderboard() {
                 ))}
               </tbody>
             </table>
+          </div>
+        )}
+
+        {selectedTeam && (
+          <div
+            style={{
+              position: "fixed",
+              top: 0,
+              left: 0,
+              right: 0,
+              bottom: 0,
+              background: "rgba(0, 0, 0, 0.8)",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              zIndex: 1000,
+              padding: 16,
+            }}
+            onClick={() => setSelectedTeam(null)}
+          >
+            <div
+              className="card"
+              style={{ maxWidth: 500, width: "100%", background: "var(--bg-2, #1e293b)", border: "1px solid var(--gold)" }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="spread" style={{ marginBottom: 12 }}>
+                <h3 style={{ margin: 0, color: "var(--gold)" }}>🏴‍☠️ Team Details: {selectedTeam.teamName}</h3>
+                <button className="btn small ghost" onClick={() => setSelectedTeam(null)}>✖</button>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+                <div><strong>Team ID:</strong> <span className="mono">{selectedTeam.teamId}</span></div>
+                <div><strong>Current Level:</strong> Level {selectedTeam.currentLevel || 1}</div>
+                <div><strong>Total Points:</strong> <b style={{ color: "var(--gold)" }}>{selectedTeam.points}</b></div>
+                <div><strong>Status:</strong> {selectedTeam.status || "Active"}</div>
+                <div><strong>Wrong QR Scans:</strong> {selectedTeam.wrongScans || 0}</div>
+                <div><strong>Clues Solved:</strong> {selectedTeam.solvedClues?.length || 0}</div>
+              </div>
+
+              {selectedTeam.collectedSecretFragments?.length > 0 && (
+                <div style={{ marginBottom: 12 }}>
+                  <h4 style={{ margin: "0 0 6px", fontSize: 13, color: "var(--gold)" }}>🧩 Secret Code Fragments:</h4>
+                  <div className="row" style={{ gap: 6 }}>
+                    {selectedTeam.collectedSecretFragments.map((frag, idx) => (
+                      <span key={idx} className="pill ok mono">{frag}</span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <button className="btn small" style={{ width: "100%", marginTop: 8 }} onClick={() => setSelectedTeam(null)}>
+                Close Inspector
+              </button>
+            </div>
           </div>
         )}
 
