@@ -8,7 +8,7 @@ const eventService = require("../services/eventService");
 const { frontendUrl } = require("../config/env");
 
 async function resolveEventId(req) {
-  const paramEventId = req.query.eventId || req.body?.eventId || req.params?.eventId;
+  const paramEventId = req.params?.eventId || req.query?.eventId || req.body?.eventId;
   if (paramEventId) {
     const ev = await Event.findById(paramEventId);
     if (ev) return ev._id;

@@ -1,4 +1,4 @@
-const { Team, Clue } = require("../models");
+const { Team, Clue, TeamClueAssignment } = require("../models");
 const { success } = require("../utils/ApiResponse");
 const asyncHandler = require("../utils/asyncHandler");
 const eventService = require("../services/eventService");
@@ -19,7 +19,20 @@ const scan = asyncHandler(async (req, res) => {
 
 const currentClue = asyncHandler(async (req, res) => {
   const team = await Team.findById(req.team._id);
-  const clue = await Clue.findOne({ eventId: team.eventId, clueNumber: team.currentClue, active: true });
+
+  let clue = null;
+  const assignment = await TeamClueAssignment.findOne({
+    eventId: team.eventId,
+    teamId: team._id,
+    sequenceNumber: team.currentLevel,
+  }).populate("clueId");
+
+  if (assignment && assignment.clueId && assignment.clueId.active) {
+    clue = assignment.clueId;
+  } else {
+    clue = await Clue.findOne({ eventId: team.eventId, clueNumber: team.currentClue, active: true });
+  }
+
   if (!clue) {
     return success(res, { clue: null, currentLevel: team.currentLevel }, "No active clue found");
   }

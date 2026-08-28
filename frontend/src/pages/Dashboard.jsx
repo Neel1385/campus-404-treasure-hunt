@@ -45,6 +45,7 @@ export default function Dashboard() {
   const [sideQuests, setSideQuests] = useState([]);
   const [questAnswers, setQuestAnswers] = useState({});
   const [answer, setAnswer] = useState("");
+  const [secretCodeInput, setSecretCodeInput] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
@@ -109,6 +110,24 @@ export default function Dashboard() {
     try {
       const res = await api.post("/game/hint", { clueId: clue.clue.id, hintNumber }, { token });
       setNotice(`${res.hint} (-${res.penalty} points)`);
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitFinalSecretCode = async (e) => {
+    e.preventDefault();
+    if (!currentEvent?._id || !secretCodeInput) return;
+    setError("");
+    setNotice("");
+    setBusy(true);
+    try {
+      const res = await api.post(`/events/${currentEvent._id}/final-challenge/try-code`, { secretCode: secretCodeInput }, { token });
+      setNotice(res.message);
+      setSecretCodeInput("");
       await load();
     } catch (err) {
       setError(err.message);
@@ -189,15 +208,32 @@ export default function Dashboard() {
 
         {fragments.length > 0 && (
           <div className="card" style={{ marginBottom: 16, background: "var(--bg-2)" }}>
-            <h3 style={{ margin: 0, color: "var(--gold)" }}>🧩 Collected Secret Code Fragments</h3>
-            <p className="muted" style={{ fontSize: 13 }}>Combine these fragments to unlock the final challenge chest.</p>
-            <div className="row" style={{ gap: 8, marginTop: 8 }}>
+            <div className="spread">
+              <div>
+                <h3 style={{ margin: 0, color: "var(--gold)" }}>🧩 Collected Secret Code Fragments</h3>
+                <p className="muted" style={{ fontSize: 13, margin: "4px 0 0" }}>Combine these fragments to unlock the physical treasure chest!</p>
+              </div>
+            </div>
+            <div className="row" style={{ gap: 8, marginTop: 12 }}>
               {fragments.map((frag, idx) => (
                 <span key={idx} className="pill ok mono" style={{ fontSize: 14 }}>
                   {frag}
                 </span>
               ))}
             </div>
+
+            <form onSubmit={submitFinalSecretCode} className="row" style={{ marginTop: 16 }}>
+              <input
+                placeholder="Enter combined secret code..."
+                value={secretCodeInput}
+                onChange={(e) => setSecretCodeInput(e.target.value)}
+                style={{ flex: 1, minWidth: 200 }}
+                required
+              />
+              <button className="btn ok" type="submit" disabled={busy}>
+                🔓 Unlock Physical Chest
+              </button>
+            </form>
           </div>
         )}
 

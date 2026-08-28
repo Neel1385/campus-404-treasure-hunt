@@ -279,6 +279,8 @@ async function processQRScan(team, rawQrId, event) {
         totalPoints: team.points,
       };
     }
+    case QR_TYPE.HINT:
+    case QR_TYPE.CHECKPOINT:
     case QR_TYPE.NORMAL:
     case QR_TYPE.ROAD_PONEGLYPH:
     default: {
@@ -479,6 +481,21 @@ async function submitAnswer(team, clueId, rawAnswer, event) {
 }
 
 async function handleCorrectAnswer(team, clue, event) {
+  const alreadySolved = await Submission.findOne({
+    eventId: event._id,
+    teamId: team._id,
+    clueId: clue._id,
+    correct: true,
+  });
+  if (alreadySolved) {
+    return {
+      success: true,
+      correct: true,
+      message: "Clue already solved!",
+      totalPoints: team.points,
+    };
+  }
+
   await Submission.create({
     eventId: event._id,
     teamId: team._id,

@@ -414,6 +414,15 @@ function Teams({ token, run, flash, eventId }) {
   const [search, setSearch] = useState("");
   const [pointsMap, setPointsMap] = useState({});
   const [unlockMap, setUnlockMap] = useState({});
+  const [bulkCount, setBulkCount] = useState(5);
+  const [generatedTeams, setGeneratedTeams] = useState(null);
+
+  const handleBulkGenerate = async () => {
+    const res = await run(() => api.post(`/events/${eventId}/bulk-teams`, { count: Number(bulkCount) }, { token }));
+    setGeneratedTeams(res.teams || res || []);
+    flash(`Bulk generated ${res.teams?.length || count} teams!`);
+    load().catch(() => {});
+  };
 
   const load = useCallback(async () => {
     const query = eventId ? `?eventId=${eventId}` : "";
@@ -435,13 +444,49 @@ function Teams({ token, run, flash, eventId }) {
     <div className="card">
       <div className="spread" style={{ marginBottom: 12 }}>
         <h3 style={{ margin: 0, color: "var(--gold)" }}>🏴‍☠️ Registered Teams ({teams.length})</h3>
-        <input
-          style={{ maxWidth: 240 }}
-          placeholder="Search team..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+        <div className="row" style={{ gap: 8 }}>
+          <input
+            type="number"
+            min="1"
+            max="50"
+            value={bulkCount}
+            onChange={(e) => setBulkCount(e.target.value)}
+            style={{ width: 70 }}
+          />
+          <button className="btn small secondary" onClick={handleBulkGenerate}>
+            ⚡ Bulk Generate Teams
+          </button>
+          <input
+            style={{ maxWidth: 180 }}
+            placeholder="Search team..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
       </div>
+
+      {generatedTeams && (
+        <div className="card" style={{ background: "var(--bg-2)", marginBottom: 16 }}>
+          <div className="spread">
+            <h4 style={{ margin: 0, color: "var(--gold)" }}>⚡ Generated Teams Output</h4>
+            <button className="btn small ghost" onClick={() => setGeneratedTeams(null)}>Dismiss</button>
+          </div>
+          <table className="board" style={{ marginTop: 8 }}>
+            <thead>
+              <tr><th>Team ID</th><th>Team Name</th><th>Password</th></tr>
+            </thead>
+            <tbody>
+              {generatedTeams.map((gt, idx) => (
+                <tr key={idx}>
+                  <td className="mono">{gt.teamId}</td>
+                  <td>{gt.teamName}</td>
+                  <td className="mono">{gt.password}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       {filtered.map((t) => (
         <div key={t._id} className="card" style={{ background: "var(--bg-2)", padding: 14, marginBottom: 8 }}>
