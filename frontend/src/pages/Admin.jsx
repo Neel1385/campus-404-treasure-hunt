@@ -19,7 +19,29 @@ export default function Admin() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [selectedEventId, setSelectedEventId] = useState("");
+  const [selectedEventId, setSelectedEventId] = useState(() => localStorage.getItem("campus404_admin_event_id") || "");
+  const [eventsList, setEventsList] = useState([]);
+
+  useEffect(() => {
+    if (selectedEventId) {
+      localStorage.setItem("campus404_admin_event_id", selectedEventId);
+    }
+  }, [selectedEventId]);
+
+  useEffect(() => {
+    if (!admin?.token) return;
+    api.get("/events", { token: admin.token })
+      .then((data) => {
+        const list = data || [];
+        setEventsList(list);
+        if (list.length > 0 && !selectedEventId) {
+          const defaultId = list[0]._id;
+          setSelectedEventId(defaultId);
+          localStorage.setItem("campus404_admin_event_id", defaultId);
+        }
+      })
+      .catch(() => {});
+  }, [admin?.token]);
 
   if (!admin?.token) return <Navigate to="/admin/login" replace />;
 
@@ -141,6 +163,32 @@ export default function Admin() {
 
       {/* Main Admin Content Area */}
       <main style={{ flex: 1, padding: "24px 32px", overflowY: "auto" }}>
+        {/* Persistent Global Event Bar */}
+        <div className="card" style={{ marginBottom: 20, background: "var(--bg-2, #1e293b)", borderLeft: "4px solid var(--gold, #f59e0b)" }}>
+          <div className="spread">
+            <div className="row" style={{ gap: 12 }}>
+              <span style={{ fontSize: 18, fontWeight: 700, color: "var(--gold, #f59e0b)" }}>🎯 Active Event Context:</span>
+              <select
+                value={selectedEventId}
+                onChange={(e) => setSelectedEventId(e.target.value)}
+                style={{ minWidth: 260, padding: "6px 10px", borderRadius: 6, fontSize: 14, fontWeight: 600 }}
+              >
+                <option value="">-- Select Active Event --</option>
+                {eventsList.map((e) => (
+                  <option key={e._id} value={e._id}>
+                    {e.name} ({STATUS_LABEL[e.status] || e.status})
+                  </option>
+                ))}
+              </select>
+            </div>
+            {selectedEventId && (
+              <span className="pill info" style={{ fontSize: 12 }}>
+                ID: {selectedEventId}
+              </span>
+            )}
+          </div>
+        </div>
+
         {error && <div className="alert error" style={{ marginBottom: 16 }}>{error}</div>}
         {notice && <div className="alert success" style={{ marginBottom: 16 }}>{notice}</div>}
 
@@ -355,6 +403,14 @@ function Overview({ token, run, flash, selectedEventId, setSelectedEventId }) {
 
 function Teams({ token, run, flash, eventId }) {
   const [teams, setTeams] = useState([]);
+
+  if (!eventId) {
+    return (
+      <div className="card alert warn">
+        ⚠️ <strong>No Active Event Selected:</strong> Please select or create an event using the Event Context bar above to view and manage registered teams.
+      </div>
+    );
+  }
   const [search, setSearch] = useState("");
   const [pointsMap, setPointsMap] = useState({});
   const [unlockMap, setUnlockMap] = useState({});
@@ -452,6 +508,14 @@ function Teams({ token, run, flash, eventId }) {
 
 function Clues({ token, run, flash, eventId }) {
   const [clues, setClues] = useState([]);
+
+  if (!eventId) {
+    return (
+      <div className="card alert warn">
+        ⚠️ <strong>No Active Event Selected:</strong> Please select or create an event using the Event Context bar above to view and manage clues.
+      </div>
+    );
+  }
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({
     clueNumber: "",
@@ -540,6 +604,14 @@ function Clues({ token, run, flash, eventId }) {
 
 function QRCodes({ token, run, flash, eventId }) {
   const [qrs, setQrs] = useState([]);
+
+  if (!eventId) {
+    return (
+      <div className="card alert warn">
+        ⚠️ <strong>No Active Event Selected:</strong> Please select or create an event using the Event Context bar above to view and manage QR codes.
+      </div>
+    );
+  }
   const [clues, setClues] = useState([]);
   const [selectedClue, setSelectedClue] = useState("");
 
@@ -604,6 +676,14 @@ function QRCodes({ token, run, flash, eventId }) {
 
 function SideQuests({ token, run, flash, eventId }) {
   const [quests, setQuests] = useState([]);
+
+  if (!eventId) {
+    return (
+      <div className="card alert warn">
+        ⚠️ <strong>No Active Event Selected:</strong> Please select or create an event using the Event Context bar above to view and manage side quests.
+      </div>
+    );
+  }
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [points, setPoints] = useState(25);
@@ -660,6 +740,14 @@ function SideQuests({ token, run, flash, eventId }) {
 
 function Audit({ token, run, eventId }) {
   const [logs, setLogs] = useState([]);
+
+  if (!eventId) {
+    return (
+      <div className="card alert warn">
+        ⚠️ <strong>No Active Event Selected:</strong> Please select or create an event using the Event Context bar above to view activity logs.
+      </div>
+    );
+  }
 
   useEffect(() => {
     const query = eventId ? `?eventId=${eventId}` : "";
