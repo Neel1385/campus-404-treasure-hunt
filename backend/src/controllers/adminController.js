@@ -421,7 +421,20 @@ const resetEvent = asyncHandler(async (req, res) => {
 
 const listAuditLogs = asyncHandler(async (req, res) => {
   const eventId = await resolveEventId(req);
-  const logs = await AuditLog.find({ eventId }).sort({ createdAt: -1 }).limit(200);
+  const { action, search } = req.query;
+  const query = { eventId };
+
+  if (action) query.action = action;
+  if (search) {
+    const escaped = search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    query.$or = [
+      { note: { $regex: escaped, $options: "i" } },
+      { adminName: { $regex: escaped, $options: "i" } },
+      { action: { $regex: escaped, $options: "i" } },
+    ];
+  }
+
+  const logs = await AuditLog.find(query).sort({ createdAt: -1 }).limit(200);
   return success(res, { logs }, "Audit logs");
 });
 

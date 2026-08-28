@@ -8,6 +8,7 @@ const Event = require("./Event");
 const ScoreTransaction = require("./ScoreTransaction");
 const SideQuest = require("./SideQuest");
 const TeamClueAssignment = require("./TeamClueAssignment");
+const ProcessedOperation = require("./ProcessedOperation");
 
 module.exports = {
   Team,
@@ -20,4 +21,5 @@ module.exports = {
   ScoreTransaction,
   SideQuest,
   TeamClueAssignment,
+  ProcessedOperation,
 };

@@ -360,6 +360,33 @@ function Overview({ token, run, flash, selectedEventId, setSelectedEventId }) {
             <form onSubmit={saveSettings} style={{ marginTop: 16 }}>
               <h4>Wrong QR Blocking Engine</h4>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div className="field">
+                  <label>Clues Per Team (Random Pool Limit)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={settingsDraft.settings?.cluesPerTeam || 5}
+                    onChange={(e) => setSettingsDraft({
+                      ...settingsDraft,
+                      settings: { ...settingsDraft.settings, cluesPerTeam: Number(e.target.value) }
+                    })}
+                  />
+                </div>
+                <div className="field">
+                  <label>Physical Treasure Secret Code</label>
+                  <input
+                    type="text"
+                    value={settingsDraft.settings?.finalSecretCode || "CAMPUS404"}
+                    onChange={(e) => setSettingsDraft({
+                      ...settingsDraft,
+                      settings: { ...settingsDraft.settings, finalSecretCode: e.target.value }
+                    })}
+                  />
+                </div>
+              </div>
+
+              <h4>Wrong QR Blocking Engine</h4>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <label className="row">
                   <input
                     type="checkbox"
@@ -488,7 +515,11 @@ function Teams({ token, run, flash, eventId }) {
         </div>
       )}
 
-      {filtered.map((t) => (
+      {teams.length === 0 ? (
+        <div className="card muted" style={{ textAlign: "center", padding: 20 }}>
+          No teams registered for this event yet. Use Bulk Generate Teams above or share the registration link!
+        </div>
+      ) : filtered.map((t) => (
         <div key={t._id} className="card" style={{ background: "var(--bg-2)", padding: 14, marginBottom: 8 }}>
           <div className="spread">
             <div>
@@ -562,6 +593,8 @@ function Clues({ token, run, flash, eventId }) {
     );
   }
   const [showForm, setShowForm] = useState(false);
+  const [showBulk, setShowBulk] = useState(false);
+  const [bulkJson, setBulkJson] = useState("");
   const [form, setForm] = useState({
     clueNumber: "",
     title: "",
@@ -615,10 +648,46 @@ function Clues({ token, run, flash, eventId }) {
     <div className="card">
       <div className="spread" style={{ marginBottom: 12 }}>
         <h3 style={{ color: "var(--gold)", margin: 0 }}>📜 Clue Pool ({clues.length})</h3>
-        <button className="btn small" onClick={() => setShowForm(!showForm)}>
-          {showForm ? "Cancel" : "+ New Clue"}
-        </button>
+        <div className="row" style={{ gap: 8 }}>
+          <button className="btn small secondary" onClick={() => setShowBulk(!showBulk)}>
+            {showBulk ? "Cancel Bulk" : "⚡ Bulk Upload Clues"}
+          </button>
+          <button className="btn small" onClick={() => setShowForm(!showForm)}>
+            {showForm ? "Cancel" : "+ New Clue"}
+          </button>
+        </div>
       </div>
+
+      {showBulk && (
+        <div style={{ marginBottom: 16, background: "var(--bg-2)", padding: 12, borderRadius: 6 }}>
+          <h4>⚡ Bulk Upload Clues (JSON Array)</h4>
+          <textarea
+            rows={5}
+            placeholder='[{"clueNumber": 1, "title": "Library Secret", "description": "Look under desk", "checkpointName": "Library", "correctAnswer": "BOOK"}]'
+            value={bulkJson}
+            onChange={(e) => setBulkJson(e.target.value)}
+            style={{ width: "100%", fontFamily: "monospace", fontSize: 13 }}
+          />
+          <button
+            className="btn small"
+            style={{ marginTop: 8 }}
+            onClick={async () => {
+              try {
+                const parsed = JSON.parse(bulkJson);
+                const res = await run(() => api.post(`/events/${eventId}/clues/bulk`, { clues: parsed }, { token }));
+                flash(`Bulk uploaded ${res.inserted || res.length || "clues"} clues!`);
+                setShowBulk(false);
+                setBulkJson("");
+                load().catch(() => {});
+              } catch (err) {
+                flash(`Invalid JSON: ${err.message}`);
+              }
+            }}
+          >
+            Submit Bulk Clues
+          </button>
+        </div>
+      )}
 
       {showForm && (
         <form onSubmit={create} style={{ marginBottom: 16, background: "var(--bg-2)", padding: 12, borderRadius: 6 }}>
@@ -636,8 +705,21 @@ function Clues({ token, run, flash, eventId }) {
           <div className="spread">
             <div>
               <strong>#{c.clueNumber} {c.title}</strong> — {c.points} pts ({c.checkpointName})
+              {c.isFinal && <span className="pill ok" style={{ marginLeft: 8, fontSize: 11 }}>🏆 FINAL TREASURE CLUE</span>}
             </div>
-            <button className="btn small danger" onClick={() => remove(c._id)}>Delete</button>
+            <div className="row" style={{ gap: 6 }}>
+              <button
+                className={`btn small ${c.isFinal ? "ok" : "secondary"}`}
+                onClick={async () => {
+                  await run(() => api.put(`/admin/clues/${c._id}`, { isFinal: !c.isFinal }, { token }));
+                  flash(c.isFinal ? "Unmarked as final clue" : "Marked as final clue!");
+                  load().catch(() => {});
+                }}
+              >
+                {c.isFinal ? "🏆 Final Clue" : "Make Final"}
+              </button>
+              <button className="btn small danger" onClick={() => remove(c._id)}>Delete</button>
+            </div>
           </div>
         </div>
       ))}
@@ -734,6 +816,8 @@ function SideQuests({ token, run, flash, eventId }) {
   const [points, setPoints] = useState(25);
   const [answer, setAnswer] = useState("");
   const [secretCodeReward, setSecretCodeReward] = useState("");
+  const [showBulk, setShowBulk] = useState(false);
+  const [bulkJson, setBulkJson] = useState("");
 
   const load = useCallback(async () => {
     if (!eventId) return;
@@ -761,7 +845,43 @@ function SideQuests({ token, run, flash, eventId }) {
 
   return (
     <div className="card">
-      <h3 style={{ color: "var(--gold)" }}>🎯 Event Side Quests ({quests.length})</h3>
+      <div className="spread" style={{ marginBottom: 12 }}>
+        <h3 style={{ color: "var(--gold)", margin: 0 }}>🎯 Event Side Quests ({quests.length})</h3>
+        <button className="btn small secondary" onClick={() => setShowBulk(!showBulk)}>
+          {showBulk ? "Cancel Bulk" : "⚡ Bulk Upload Side Quests"}
+        </button>
+      </div>
+
+      {showBulk && (
+        <div style={{ marginBottom: 16, background: "var(--bg-2)", padding: 12, borderRadius: 6 }}>
+          <h4>⚡ Bulk Upload Side Quests (JSON Array)</h4>
+          <textarea
+            rows={5}
+            placeholder='[{"title": "Riddle 1", "description": "What has keys but no locks?", "points": 25, "answer": "piano", "secretCodeReward": "X7"}]'
+            value={bulkJson}
+            onChange={(e) => setBulkJson(e.target.value)}
+            style={{ width: "100%", fontFamily: "monospace", fontSize: 13 }}
+          />
+          <button
+            className="btn small"
+            style={{ marginTop: 8 }}
+            onClick={async () => {
+              try {
+                const parsed = JSON.parse(bulkJson);
+                const res = await run(() => api.post(`/events/${eventId}/side-quests/bulk`, { quests: parsed }, { token }));
+                flash(`Bulk uploaded ${res.inserted || res.length || "quests"} side quests!`);
+                setShowBulk(false);
+                setBulkJson("");
+                load().catch(() => {});
+              } catch (err) {
+                flash(`Invalid JSON: ${err.message}`);
+              }
+            }}
+          >
+            Submit Bulk Side Quests
+          </button>
+        </div>
+      )}
 
       <form onSubmit={create} style={{ background: "var(--bg-2)", padding: 12, borderRadius: 6, marginBottom: 16 }}>
         <div className="field"><label>Title</label><input value={title} onChange={(e) => setTitle(e.target.value)} required /></div>
@@ -785,6 +905,8 @@ function SideQuests({ token, run, flash, eventId }) {
 
 function Audit({ token, run, eventId }) {
   const [logs, setLogs] = useState([]);
+  const [actionFilter, setActionFilter] = useState("");
+  const [search, setSearch] = useState("");
 
   if (!eventId) {
     return (
@@ -794,20 +916,54 @@ function Audit({ token, run, eventId }) {
     );
   }
 
-  useEffect(() => {
-    const query = eventId ? `?eventId=${eventId}` : "";
+  const loadLogs = useCallback(() => {
+    let query = eventId ? `?eventId=${eventId}` : "";
+    if (actionFilter) query += `&action=${encodeURIComponent(actionFilter)}`;
+    if (search) query += `&search=${encodeURIComponent(search)}`;
     run(() => api.get(`/admin/audit${query}`, { token }))
       .then((data) => setLogs(data.logs || []))
       .catch(() => {});
-  }, [token, eventId]);
+  }, [token, eventId, actionFilter, search, run]);
+
+  useEffect(() => {
+    loadLogs();
+  }, [loadLogs]);
 
   return (
     <div className="card">
-      <h3 style={{ color: "var(--gold)" }}>📋 Activity Log ({logs.length})</h3>
+      <div className="spread" style={{ marginBottom: 12 }}>
+        <h3 style={{ color: "var(--gold)", margin: 0 }}>📋 Activity Log ({logs.length})</h3>
+        <div className="row" style={{ gap: 8 }}>
+          <select value={actionFilter} onChange={(e) => setActionFilter(e.target.value)}>
+            <option value="">All Action Types</option>
+            <option value="POINTS_MANUAL">Points Manual</option>
+            <option value="ADMIN_ADJUST_SCORE">Admin Adjust Score</option>
+            <option value="CLUE_CREATED">Clue Created</option>
+            <option value="CLUE_UPDATED">Clue Updated</option>
+            <option value="CLUE_DELETED">Clue Deleted</option>
+            <option value="CLUE_MANUAL_UNLOCK">Clue Unlocked</option>
+            <option value="QR_CREATED">QR Created</option>
+            <option value="QR_TOGGLED">QR Toggled</option>
+            <option value="TEAM_STATUS_CHANGED">Team Status Changed</option>
+            <option value="TEAM_RESET">Team Reset</option>
+            <option value="BULK_TEAMS_GENERATED">Bulk Teams Generated</option>
+            <option value="ADMIN_BLOCK_TEAM">Admin Block Team</option>
+            <option value="ADMIN_UNBLOCK_TEAM">Admin Unblock Team</option>
+          </select>
+          <input
+            placeholder="Search activity note/admin..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ maxWidth: 220 }}
+          />
+        </div>
+      </div>
+
       <ul className="list">
         {logs.map((l) => (
           <li key={l._id}>
-            <span className="pill info">{l.action}</span> {l.note}
+            <span className="pill info" style={{ fontSize: 11 }}>{l.action}</span>{" "}
+            <strong>{l.adminName || "Admin"}</strong>: {l.note}
           </li>
         ))}
       </ul>
