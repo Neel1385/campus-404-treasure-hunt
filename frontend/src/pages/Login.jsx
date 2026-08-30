@@ -16,7 +16,11 @@ export default function Login() {
     setError("");
     setBusy(true);
     try {
-      await login(identifier, password);
+      const res = await login(identifier, password);
+      if (res?.team?.role === "admin") {
+        navigate("/admin", { replace: true });
+        return;
+      }
       const from = location.state?.from || "/dashboard";
       navigate(from, { replace: true });
     } catch (err) {

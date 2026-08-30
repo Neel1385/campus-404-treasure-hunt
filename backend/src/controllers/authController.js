@@ -98,15 +98,26 @@ const login = asyncHandler(async (req, res) => {
   }
 
   const text = String(identifier).trim();
-  const query = {
-    role: "player",
-    $or: [{ teamId: text.toUpperCase() }, { teamName: text }],
-  };
-  if (eventId) {
-    query.eventId = eventId;
-  }
 
-  const team = await Team.findOne(query).select("+passwordHash");
+  // Allow seamless Admin authentication from standard login
+  let team = await Team.findOne({
+    $or: [
+      { role: "admin", email: text.toLowerCase() },
+      { role: "admin", teamName: text },
+      { role: "admin", teamId: text.toUpperCase() },
+    ],
+  }).select("+passwordHash");
+
+  if (!team) {
+    const query = {
+      role: "player",
+      $or: [{ teamId: text.toUpperCase() }, { teamName: text }],
+    };
+    if (eventId) {
+      query.eventId = eventId;
+    }
+    team = await Team.findOne(query).select("+passwordHash");
+  }
 
   if (!team || !(await team.comparePassword(password))) {
     throw new ApiError("Invalid credentials.", 401, "INVALID_CREDENTIALS");

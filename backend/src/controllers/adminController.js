@@ -188,6 +188,21 @@ const adjustPoints = asyncHandler(async (req, res) => {
   return success(res, { points: newPoints }, "Points updated");
 });
 
+const updateTeamPassword = asyncHandler(async (req, res) => {
+  const team = await Team.findById(req.params.id);
+  const newPassword = String(req.body.password || "").trim();
+  if (!team || team.role !== "player") {
+    return res.status(404).json({ success: false, message: "Team not found", code: "NOT_FOUND" });
+  }
+  if (!newPassword || newPassword.length < 4) {
+    return res.status(400).json({ success: false, message: "Password must be at least 4 characters.", code: "VALIDATION_ERROR" });
+  }
+  team.passwordHash = newPassword;
+  await team.save();
+  await writeAudit(req.team, "TEAM_PASSWORD_CHANGED", "Team", String(team._id), undefined, "Updated", `Password updated by admin`, team.eventId);
+  return success(res, { teamId: team.teamId }, "Team password updated.");
+});
+
 const unlockClue = asyncHandler(async (req, res) => {
   const team = await Team.findById(req.params.id);
   if (!team || team.role !== "player") {
@@ -402,6 +417,39 @@ const updateSettings = asyncHandler(async (req, res) => {
   return success(res, { event }, "Settings updated");
 });
 
+const deleteEvent = asyncHandler(async (req, res) => {
+  const eventId = req.params.eventId || (await resolveEventId(req));
+  const { deleteTeams, deleteClues, deleteQRs, deleteLogs, deleteSideQuests } = req.body || {};
+
+  const ev = await Event.findById(eventId);
+  if (!ev) {
+    return res.status(404).json({ success: false, message: "Event not found", code: "NOT_FOUND" });
+  }
+
+  if (deleteTeams) {
+    await Team.deleteMany({ eventId, role: "player" });
+  }
+  if (deleteClues) {
+    await Clue.deleteMany({ eventId });
+  }
+  if (deleteQRs) {
+    await QRCode.deleteMany({ eventId });
+  }
+  if (deleteLogs) {
+    await AuditLog.deleteMany({ eventId });
+    await QRScan.deleteMany({ eventId });
+    await Submission.deleteMany({ eventId });
+  }
+  if (deleteSideQuests) {
+    await SideQuest.deleteMany({ eventId });
+  }
+
+  await Event.deleteOne({ _id: eventId });
+  await writeAudit(req.team, "EVENT_DELETED", "Event", String(eventId), ev.name, undefined, "Event deleted by admin", eventId);
+
+  return success(res, { deletedEventId: eventId }, `Event "${ev.name}" and selected records purged.`);
+});
+
 const resetEvent = asyncHandler(async (req, res) => {
   const { allowResetEvent } = require("../config/env");
   if (!allowResetEvent) {
@@ -446,6 +494,7 @@ module.exports = {
   resetTeam,
   adjustPoints,
   unlockClue,
+  updateTeamPassword,
   listClues,
   createClue,
   updateClue,
@@ -460,5 +509,6 @@ module.exports = {
   setEventStatus,
   updateSettings,
   resetEvent,
+  deleteEvent,
   listAuditLogs,
 };

@@ -22,6 +22,9 @@ export function EventProvider({ children }) {
     root.style.setProperty("--event-accent", theme.accentColor || "#f59e0b");
     root.style.setProperty("--event-background", theme.backgroundColor || "#0f172a");
     root.style.setProperty("--event-text", theme.textColor || "#f8fafc");
+
+    if (theme.backgroundColor) root.style.setProperty("--bg", theme.backgroundColor);
+    if (theme.accentColor) root.style.setProperty("--gold", theme.accentColor);
   };
 
   const selectEvent = (event) => {

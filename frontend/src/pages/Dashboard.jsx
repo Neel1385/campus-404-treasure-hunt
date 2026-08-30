@@ -206,7 +206,7 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {fragments.length > 0 && (
+        {fragments.length > 0 && currentEvent?.settings?.enableSecretCode !== false && (
           <div className="card" style={{ marginBottom: 16, background: "var(--bg-2)" }}>
             <div className="spread">
               <div>
@@ -305,6 +305,15 @@ export default function Dashboard() {
           </div>
         ) : (
           <div className="card muted">No active levels right now. Set sail when the hunt begins.</div>
+        )}
+
+        {currentEvent?.rulesAndRegulations && (
+          <div className="card" style={{ marginBottom: 16, background: "var(--bg-2)" }}>
+            <h3 style={{ color: "var(--gold)", margin: "0 0 8px" }}>📜 Event Rules & Regulations</h3>
+            <p style={{ whiteSpace: "pre-wrap", fontSize: 14, margin: 0, color: "var(--text)" }}>
+              {currentEvent.rulesAndRegulations}
+            </p>
+          </div>
         )}
 
         {sideQuests.length > 0 && (

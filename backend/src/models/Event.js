@@ -28,6 +28,7 @@ const eventSchema = new mongoose.Schema(
     duration: { type: Number, default: 60 }, // minutes
     pausedAt: { type: Date },
     theme: { type: themeSchema, default: () => ({}) },
+    rulesAndRegulations: { type: String, default: "1. Respect campus property.\n2. Do not tamper with QR codes.\n3. Fair play enforced at all times." },
     settings: {
       maxTeamSize: { type: Number, default: 4 },
       maxAttemptsPerClue: { type: Number, default: 3 },
@@ -45,7 +46,9 @@ const eventSchema = new mongoose.Schema(
 
       // Randomized clue pool options
       cluesPerTeam: { type: Number, default: 5 },
+      fixedFirstClueId: { type: mongoose.Schema.Types.ObjectId, ref: "Clue" },
       finalClueId: { type: mongoose.Schema.Types.ObjectId, ref: "Clue" },
+      enableSecretCode: { type: Boolean, default: true },
 
       // Side Quests & Final Challenge
       sideQuestsEnabled: { type: Boolean, default: true },

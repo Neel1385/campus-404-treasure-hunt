@@ -149,14 +149,23 @@ async function generateRandomClueAssignments(eventId) {
   for (const team of teams) {
     await TeamClueAssignment.deleteMany({ eventId, teamId: team._id });
 
-    const shuffled = [...normalClues].sort(() => 0.5 - Math.random());
-    const selected = shuffled.slice(0, Math.min(cluesPerTeam, normalClues.length));
+    let firstClue = null;
+    if (settings.fixedFirstClueId) {
+      firstClue = normalClues.find((c) => String(c._id) === String(settings.fixedFirstClueId));
+    }
 
-    for (let i = 0; i < selected.length; i++) {
+    const remainingNormal = normalClues.filter((c) => !firstClue || String(c._id) !== String(firstClue._id));
+    const shuffled = [...remainingNormal].sort(() => 0.5 - Math.random());
+
+    const sequenceList = firstClue
+      ? [firstClue, ...shuffled.slice(0, Math.max(0, cluesPerTeam - 1))]
+      : shuffled.slice(0, Math.min(cluesPerTeam, normalClues.length));
+
+    for (let i = 0; i < sequenceList.length; i++) {
       await TeamClueAssignment.create({
         eventId,
         teamId: team._id,
-        clueId: selected[i]._id,
+        clueId: sequenceList[i]._id,
         sequenceNumber: i + 1,
         isFinal: false,
       });
@@ -167,7 +176,7 @@ async function generateRandomClueAssignments(eventId) {
       eventId,
       teamId: team._id,
       clueId: finalClue._id,
-      sequenceNumber: selected.length + 1,
+      sequenceNumber: sequenceList.length + 1,
       isFinal: true,
     });
     assignmentsCreated++;

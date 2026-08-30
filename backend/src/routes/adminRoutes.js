@@ -37,6 +37,7 @@ router.get("/teams/:id", getTeam);
 router.patch("/teams/:id/status", toggleTeamStatus);
 router.post("/teams/:id/reset", resetTeam);
 router.put("/teams/:id/points", adjustPoints);
+router.put("/teams/:id/password", require("../controllers/adminController").updateTeamPassword);
 router.put("/teams/:id/unlock-clue", unlockClue);
 
 router.get("/clues", listClues);

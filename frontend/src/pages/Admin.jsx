@@ -247,11 +247,35 @@ function Overview({ token, run, flash, selectedEventId, setSelectedEventId }) {
     loadEventDetails().catch(() => {});
   }, [loadEventDetails]);
 
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [delTeams, setDelTeams] = useState(true);
+  const [delClues, setDelClues] = useState(true);
+  const [delQRs, setDelQRs] = useState(true);
+  const [delLogs, setDelLogs] = useState(true);
+  const [delQuests, setDelQuests] = useState(true);
+
   const setStatus = async (status) => {
     if (!selectedEventId) return;
     await run(() => api.post(`/events/${selectedEventId}/status`, { status }, { token }));
     flash(`Event status set to ${STATUS_LABEL[status] || status}`);
     loadEventDetails().catch(() => {});
+  };
+
+  const handleDeleteEvent = async () => {
+    if (!selectedEventId) return;
+    if (!window.confirm("Are you sure you want to permanently delete this event?")) return;
+    await run(() => api.del(`/admin/events/${selectedEventId}`, {
+      deleteTeams: delTeams,
+      deleteClues: delClues,
+      deleteQRs: delQRs,
+      deleteLogs: delLogs,
+      deleteSideQuests: delQuests,
+    }, { token }));
+    flash("Event permanently deleted.");
+    setShowDeleteModal(false);
+    setSelectedEventId("");
+    localStorage.removeItem("campus404_admin_event_id");
+    loadEvents().catch(() => {});
   };
 
   const createNewEvent = async () => {
@@ -319,10 +343,35 @@ function Overview({ token, run, flash, selectedEventId, setSelectedEventId }) {
               <button className="btn small" onClick={() => setStatus("RUNNING")}>Start / Resume</button>
               <button className="btn small secondary" onClick={() => setStatus("PAUSED")}>Pause</button>
               <button className="btn small danger" onClick={() => setStatus("ENDED")}>End</button>
+              <button className="btn small danger" style={{ background: "#8b0000" }} onClick={() => setShowDeleteModal(true)}>
+                🗑️ Delete Event
+              </button>
             </div>
           )}
         </div>
       </div>
+
+      {showDeleteModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}>
+          <div className="card" style={{ maxWidth: 440, width: "100%", background: "var(--bg-2)", border: "1px solid var(--danger)" }}>
+            <h3 style={{ color: "var(--danger)", margin: "0 0 12px" }}>🗑️ Delete Event ({event?.name})</h3>
+            <p style={{ fontSize: 13, color: "var(--muted)", marginBottom: 16 }}>
+              Select which associated event data should also be permanently purged:
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+              <label className="row"><input type="checkbox" checked={delTeams} onChange={(e) => setDelTeams(e.target.checked)} /> <span>Registered Teams</span></label>
+              <label className="row"><input type="checkbox" checked={delClues} onChange={(e) => setDelClues(e.target.checked)} /> <span>Clues Pool</span></label>
+              <label className="row"><input type="checkbox" checked={delQRs} onChange={(e) => setDelQRs(e.target.checked)} /> <span>QR Codes</span></label>
+              <label className="row"><input type="checkbox" checked={delLogs} onChange={(e) => setDelLogs(e.target.checked)} /> <span>Audit Logs & Submissions</span></label>
+              <label className="row"><input type="checkbox" checked={delQuests} onChange={(e) => setDelQuests(e.target.checked)} /> <span>Side Quests</span></label>
+            </div>
+            <div className="row" style={{ gap: 8 }}>
+              <button className="btn small danger" style={{ flex: 1 }} onClick={handleDeleteEvent}>Confirm Delete</button>
+              <button className="btn small secondary" onClick={() => setShowDeleteModal(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {stats && (
         <div className="card" style={{ marginBottom: 20 }}>
@@ -358,6 +407,69 @@ function Overview({ token, run, flash, selectedEventId, setSelectedEventId }) {
 
           {settingsDraft && (
             <form onSubmit={saveSettings} style={{ marginTop: 16 }}>
+              <h4>📜 Event Rules & Regulations</h4>
+              <div className="field">
+                <textarea
+                  rows={4}
+                  value={settingsDraft.rulesAndRegulations ?? event.rulesAndRegulations ?? ""}
+                  onChange={(e) => setSettingsDraft({
+                    ...settingsDraft,
+                    rulesAndRegulations: e.target.value
+                  })}
+                  placeholder="Enter event rules and guidelines for players..."
+                />
+              </div>
+
+              <h4>🎨 Dynamic Event Website Theme</h4>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 16 }}>
+                <div className="field">
+                  <label>Primary Theme Color</label>
+                  <input
+                    type="color"
+                    value={settingsDraft.theme?.primaryColor || "#10b981"}
+                    onChange={(e) => setSettingsDraft({
+                      ...settingsDraft,
+                      theme: { ...settingsDraft.theme, primaryColor: e.target.value }
+                    })}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+                <label className="row">
+                  <input
+                    type="checkbox"
+                    checked={settingsDraft.settings?.enableSecretCode !== false}
+                    onChange={(e) => setSettingsDraft({
+                      ...settingsDraft,
+                      settings: { ...settingsDraft.settings, enableSecretCode: e.target.checked }
+                    })}
+                  />
+                  <span>Enable Physical Secret Code Form for Players</span>
+                </label>
+                <div className="field">
+                  <label>Accent Gold Color</label>
+                  <input
+                    type="color"
+                    value={settingsDraft.theme?.accentColor || "#f59e0b"}
+                    onChange={(e) => setSettingsDraft({
+                      ...settingsDraft,
+                      theme: { ...settingsDraft.theme, accentColor: e.target.value }
+                    })}
+                  />
+                </div>
+                <div className="field">
+                  <label>Background Color</label>
+                  <input
+                    type="color"
+                    value={settingsDraft.theme?.backgroundColor || "#0f172a"}
+                    onChange={(e) => setSettingsDraft({
+                      ...settingsDraft,
+                      theme: { ...settingsDraft.theme, backgroundColor: e.target.value }
+                    })}
+                  />
+                </div>
+              </div>
               <h4>Wrong QR Blocking Engine</h4>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div className="field">
@@ -441,6 +553,7 @@ function Teams({ token, run, flash, eventId }) {
   const [search, setSearch] = useState("");
   const [pointsMap, setPointsMap] = useState({});
   const [unlockMap, setUnlockMap] = useState({});
+  const [passMap, setPassMap] = useState({});
   const [bulkCount, setBulkCount] = useState(5);
   const [generatedTeams, setGeneratedTeams] = useState(null);
   const [showAddTeam, setShowAddTeam] = useState(false);
@@ -578,6 +691,24 @@ function Teams({ token, run, flash, eventId }) {
                 Adjust
               </button>
               <input
+                style={{ width: 90 }}
+                placeholder="new pass"
+                value={passMap[t._id] ?? ""}
+                onChange={(e) => setPassMap({ ...passMap, [t._id]: e.target.value })}
+              />
+              <button
+                className="btn small ghost"
+                onClick={async () => {
+                  if (!passMap[t._id]) return flash("Enter a new password first");
+                  await run(() => api.put(`/admin/teams/${t._id}/password`, { password: passMap[t._id] }, { token }));
+                  flash(`Password changed for ${t.teamName}`);
+                  setPassMap({ ...passMap, [t._id]: "" });
+                  refresh();
+                }}
+              >
+                Set Pass
+              </button>
+              <input
                 style={{ width: 60 }}
                 placeholder="clue#"
                 value={unlockMap[t._id] ?? ""}
@@ -681,6 +812,24 @@ function Clues({ token, run, flash, eventId }) {
       <div className="spread" style={{ marginBottom: 12 }}>
         <h3 style={{ color: "var(--gold)", margin: 0 }}>📜 Clue Pool ({clues.length})</h3>
         <div className="row" style={{ gap: 8 }}>
+          <button
+            className="btn small secondary"
+            onClick={() => {
+              const csvContent = "data:text/csv;charset=utf-8," +
+                ["Clue Number,Title,Checkpoint,Points,Answer,Is Final"]
+                  .concat(clues.map((c) => `${c.clueNumber},"${c.title}","${c.checkpointName || ""}",${c.points},"${c.correctAnswer || ""}",${c.isFinal}`))
+                  .join("\n");
+              const encodedUri = encodeURI(csvContent);
+              const link = document.createElement("a");
+              link.setAttribute("href", encodedUri);
+              link.setAttribute("download", `event_${eventId}_clues.csv`);
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+            }}
+          >
+            📥 Download All Clues
+          </button>
           <button className="btn small secondary" onClick={() => setShowBulk(!showBulk)}>
             {showBulk ? "Cancel Bulk" : "⚡ Bulk Upload Clues"}
           </button>
@@ -897,10 +1046,22 @@ function QRCodes({ token, run, flash, eventId }) {
       </div>
 
       {qrs.map((qr) => (
-        <div key={qr._id} className="card" style={{ background: "var(--bg-2)", padding: 12, marginBottom: 8 }}>
+        <div key={qr._id} className="card" style={{ background: "var(--bg-2)", padding: 14, marginBottom: 8 }}>
           <div className="spread">
             <div>
-              <span className="mono" style={{ fontWeight: 700 }}>{qr.qrId}</span> — Type: {qr.type}
+              <span className="mono" style={{ fontWeight: 700, fontSize: 16, color: "var(--gold)" }}>{qr.qrId}</span>
+              <span className="pill info" style={{ marginLeft: 8, fontSize: 11 }}>Type: {qr.type}</span>
+              {qr.checkpointName && <span className="muted" style={{ marginLeft: 8, fontSize: 13 }}>({qr.checkpointName})</span>}
+              {qr.branding?.customText && (
+                <div style={{ fontSize: 12, color: "var(--gold-light)", marginTop: 4 }}>
+                  🏷️ Label Text: "{qr.branding.customText}"
+                </div>
+              )}
+              {qr.branding?.logo && (
+                <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
+                  🖼️ Logo URL: <span className="mono">{qr.branding.logo}</span>
+                </div>
+              )}
             </div>
             <button className="btn small secondary" onClick={() => toggle(qr)}>
               {qr.active ? "Deactivate" : "Activate"}
