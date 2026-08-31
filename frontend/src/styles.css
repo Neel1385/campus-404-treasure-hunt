@@ -331,14 +331,23 @@ h1, h2, h3 { letter-spacing: -0.01em; line-height: 1.2; }
 .card {
   background:
     linear-gradient(135deg, rgba(19,26,42,0.97), rgba(14,19,32,0.99));
-  border: 1px solid rgba(212,168,67,0.12);
+  border: 1px solid rgba(212,168,67,0.15);
   border-radius: var(--radius-lg);
-  padding: 32px;
-  margin-bottom: 24px;
-  backdrop-filter: blur(10px);
+  padding: 36px 32px;
+  margin-bottom: 28px;
+  backdrop-filter: blur(12px);
   position: relative;
   overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
   transition: border-color 0.3s, box-shadow 0.3s, transform 0.3s;
+}
+
+.row { display: flex; gap: 16px; flex-wrap: wrap; align-items: center; }
+.spread { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; }
+.stat-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 16px;
 }
 .card::before {
   content: '';

@@ -167,12 +167,12 @@ export default function Dashboard() {
         {error && <div className="alert error">{error}</div>}
         {notice && <div className="alert success">{notice}</div>}
 
-        <div className="spread" style={{ marginBottom: 16 }}>
+        <div className="spread" style={{ marginBottom: 24 }}>
           <div>
-            <h2 style={{ margin: 0 }}>🏴‍☠️ {teamData?.teamName} {currentEvent ? `(${currentEvent.name})` : ""}</h2>
-            <span className="muted mono">{teamData?.teamId}</span>
+            <h2 style={{ margin: "0 0 4px" }}>🏴‍☠️ {teamData?.teamName} {currentEvent ? `(${currentEvent.name})` : ""}</h2>
+            <span className="muted mono" style={{ fontSize: 13 }}>{teamData?.teamId}</span>
           </div>
-          <div className="stat-grid" style={{ width: "100%", marginTop: 12 }}>
+          <div className="stat-grid" style={{ width: "100%", marginTop: 16 }}>
             <div className="stat">
               <div className="num" style={{ color: "#f5a623" }}>{teamData?.points ?? 0}</div>
               <div className="lbl">💰 Points</div>

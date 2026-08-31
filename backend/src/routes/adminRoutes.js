@@ -57,6 +57,7 @@ router.get("/event", eventControl);
 router.put("/event/status", setEventStatus);
 router.put("/event/settings", updateSettings);
 router.post("/event/reset", resetEvent);
+router.delete("/events/:eventId", require("../controllers/adminController").deleteEvent);
 
 router.get("/audit", listAuditLogs);
 

@@ -162,9 +162,9 @@ export default function Admin() {
       </aside>
 
       {/* Main Admin Content Area */}
-      <main style={{ flex: 1, padding: "24px 32px", overflowY: "auto" }}>
+      <main style={{ flex: 1, padding: "32px 40px", overflowY: "auto" }}>
         {/* Persistent Global Event Bar */}
-        <div className="card" style={{ marginBottom: 20, background: "var(--bg-2, #1e293b)", borderLeft: "4px solid var(--gold, #f59e0b)" }}>
+        <div className="card" style={{ marginBottom: 28, padding: "20px 24px", background: "var(--bg-2, #1e293b)", borderLeft: "4px solid var(--gold, #f59e0b)" }}>
           <div className="spread">
             <div className="row" style={{ gap: 12 }}>
               <span style={{ fontSize: 18, fontWeight: 700, color: "var(--gold, #f59e0b)" }}>🎯 Active Event Context:</span>
@@ -265,12 +265,15 @@ function Overview({ token, run, flash, selectedEventId, setSelectedEventId }) {
     if (!selectedEventId) return;
     if (!window.confirm("Are you sure you want to permanently delete this event?")) return;
     await run(() => api.del(`/admin/events/${selectedEventId}`, {
-      deleteTeams: delTeams,
-      deleteClues: delClues,
-      deleteQRs: delQRs,
-      deleteLogs: delLogs,
-      deleteSideQuests: delQuests,
-    }, { token }));
+      token,
+      body: {
+        deleteTeams: delTeams,
+        deleteClues: delClues,
+        deleteQRs: delQRs,
+        deleteLogs: delLogs,
+        deleteSideQuests: delQuests,
+      },
+    }));
     flash("Event permanently deleted.");
     setShowDeleteModal(false);
     setSelectedEventId("");
