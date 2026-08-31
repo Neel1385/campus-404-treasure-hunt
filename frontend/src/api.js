@@ -72,9 +72,14 @@ async function http(path, { method = "GET", body, token } = {}) {
     /* non-JSON response */
   }
 
-  if (!json.success) {
-    const err = new Error(json.message || `Request failed (${res.status})`);
-    err.code = json.code || "SERVER_ERROR";
+  if (!res.ok || !json.success) {
+    const defaultMsg = res.status === 404
+      ? "Resource not found on server."
+      : res.status >= 500
+      ? "Server encountered an error. Please try again."
+      : `Request failed (${res.status})`;
+    const err = new Error(json.message || defaultMsg);
+    err.code = json.code || (res.status === 404 ? "NOT_FOUND" : "SERVER_ERROR");
     err.status = res.status;
     throw err;
   }
