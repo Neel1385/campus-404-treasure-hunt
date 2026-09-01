@@ -1,5 +1,6 @@
 import { lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
+import ErrorBoundary from "./components/ErrorBoundary.jsx";
 import { useAuth } from "./auth.jsx";
 import { EventProvider } from "./EventContext.jsx";
 import Sidebar from "./Sidebar.jsx";
@@ -32,9 +33,10 @@ export default function App() {
   const isAdmin = location.pathname.startsWith("/admin");
 
   return (
-    <EventProvider>
-      {!isAdmin && <Sidebar />}
-      <Routes>
+    <ErrorBoundary>
+      <EventProvider>
+        {!isAdmin && <Sidebar />}
+        <Routes>
         <Route path="/" element={<Home />} />
         <Route path="/register" element={<Register />} />
         <Route path="/login" element={<Login />} />
@@ -79,5 +81,6 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </EventProvider>
+    </ErrorBoundary>
   );
 }

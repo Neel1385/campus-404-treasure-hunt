@@ -369,6 +369,7 @@ const generateQR = asyncHandler(async (req, res) => {
     level: clue.clueNumber,
     type: "NORMAL",
     checkpointName: clue.checkpointName,
+    branding: body.branding || {},
     active: true,
   });
   await writeAudit(req.team, "QR_GENERATED", "QRCode", qrId, undefined, { clueNumber: clue.clueNumber }, "QR generated for clue", eventId);
