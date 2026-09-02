@@ -296,6 +296,7 @@ async function seedTeams(event) {
       teamId: t.teamId,
       teamName: t.teamName,
       passwordHash: "demo1234",
+      plainPassword: "demo1234",
       members: [
         { fullName: `Leader ${i + 1}`, collegeId: `SEED-L${i + 1}` },
         { fullName: `Member ${i + 1}`, collegeId: `SEED-M${i + 1}` },

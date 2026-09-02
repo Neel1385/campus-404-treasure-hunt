@@ -65,7 +65,28 @@ CAMPUS 404 is an **event-centric, event-driven, and offline-first** QR code trea
 
 ---
 
-## 🏴‍☠️ 3. PLAYER DASHBOARD & GAMEPLAY FLOW
+## 🏴‍☠️ 3. HOW TEAMS GET THEIR FIRST CLUE & GAMEPLAY FLOW
+
+### **How Teams Obtain Their First Clue:**
+1. **Organizer Sequence Assignment:**
+   - In the Admin Panel (`⚓ Overview & Events`), organizers specify the number of `Clues Per Team` and click **`🎲 Generate Clue Assignments`**.
+   - The server executes `generateRandomClueAssignments(eventId)`.
+   - Each team receives a personalized, randomized sequence of clues (`TeamClueAssignment` records) stored in the database.
+   - **Fixed Starting Clue (Optional):** If the event configuration defines a fixed starting clue, that clue is set as Step 1 for every team, while subsequent steps are randomized.
+2. **First Clue Discovery on Player Dashboard:**
+   - Upon logging into `/dashboard`, the server fetches the team's current assignment via `/game/current-clue`.
+   - Before scanning the first QR code, the clue riddle remains **sealed** for security.
+   - The dashboard explicitly displays the designated **Checkpoint Name / Location** for Step 1 (e.g., *"Central Library Steps"*).
+3. **Unlocking the First Clue:**
+   - Team members navigate physically to the specified checkpoint on campus.
+   - Scanning the physical QR code posted at that location unlocks the clue description and reveals the riddle on their dashboard.
+4. **Submitting the Answer:**
+   - The team decipher the riddle and submits their answer via the dashboard form.
+   - A correct answer awards points, marks Level 1 complete, and advances the Log Pose to Step 2's assigned checkpoint location.
+
+---
+
+## 🧭 4. PLAYER DASHBOARD & GAMEPLAY FLOW
 
 1. **Player Registration & Login (`/register`, `/login`):**
    - Teams select an active event and register with leader details and password.

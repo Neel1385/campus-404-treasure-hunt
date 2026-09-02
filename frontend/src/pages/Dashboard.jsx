@@ -35,6 +35,61 @@ const TX_LABELS = {
   ROAD_PONEGLYPH: { label: "Special QR", color: "ok" },
 };
 
+function SideQuestItem({ quest, completed, questAnswers, setQuestAnswers, submitSideQuest, busy }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div
+      className="card"
+      style={{
+        background: "var(--bg-2)",
+        marginBottom: 8,
+        padding: 14,
+        cursor: "pointer",
+        borderLeft: expanded ? "4px solid var(--gold)" : "none",
+        transition: "all 0.2s ease",
+      }}
+      onClick={() => setExpanded(!expanded)}
+    >
+      <div className="spread">
+        <div>
+          <strong style={{ fontSize: 15, color: "var(--gold)" }}>🎯 {quest.title}</strong> —{" "}
+          <span style={{ color: "var(--gold-light)", fontWeight: 600 }}>+{quest.points} pts</span>
+          <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
+            {expanded ? "▲ Click to collapse question" : "▼ Click to reveal riddle & submit form"}
+          </div>
+        </div>
+        {completed ? (
+          <span className="pill ok">Completed</span>
+        ) : (
+          <span className="pill warn">Unsolved</span>
+        )}
+      </div>
+
+      {expanded && (
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)" }} onClick={(e) => e.stopPropagation()}>
+          <p style={{ fontSize: 14, margin: "0 0 12px", color: "var(--text)", lineHeight: 1.5 }}>
+            <strong>Riddle / Question:</strong> {quest.description}
+          </p>
+          {!completed && (
+            <div className="row" style={{ gap: 8 }}>
+              <input
+                placeholder="Type your answer here..."
+                value={questAnswers[quest._id] || ""}
+                onChange={(e) => setQuestAnswers({ ...questAnswers, [quest._id]: e.target.value })}
+                style={{ flex: 1 }}
+              />
+              <button className="btn small ok" onClick={() => submitSideQuest(quest._id)} disabled={busy}>
+                Submit Answer
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const { team, token, logout } = useAuth();
   const { currentEvent } = useEvent();
@@ -319,34 +374,17 @@ export default function Dashboard() {
         {sideQuests.length > 0 && (
           <div className="card" style={{ marginTop: 16 }}>
             <h3>🎯 Event Side Quests</h3>
-            {sideQuests.map((quest) => {
-              const completed = teamData?.completedSideQuests?.includes(quest._id);
-              return (
-                <div key={quest._id} className="card" style={{ background: "var(--bg-2)", marginBottom: 8, padding: 12 }}>
-                  <div className="spread">
-                    <div>
-                      <strong>{quest.title}</strong> — <span style={{ color: "var(--gold)" }}>+{quest.points} pts</span>
-                      <p className="muted" style={{ margin: "4px 0 0", fontSize: 13 }}>{quest.description}</p>
-                    </div>
-                    {completed ? (
-                      <span className="pill ok">Completed</span>
-                    ) : (
-                      <div className="row">
-                        <input
-                          placeholder="Your answer..."
-                          value={questAnswers[quest._id] || ""}
-                          onChange={(e) => setQuestAnswers({ ...questAnswers, [quest._id]: e.target.value })}
-                          style={{ width: 140 }}
-                        />
-                        <button className="btn small" onClick={() => submitSideQuest(quest._id)} disabled={busy}>
-                          Solve
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
+            {sideQuests.map((quest) => (
+              <SideQuestItem
+                key={quest._id}
+                quest={quest}
+                completed={teamData?.completedSideQuests?.includes(quest._id)}
+                questAnswers={questAnswers}
+                setQuestAnswers={setQuestAnswers}
+                submitSideQuest={submitSideQuest}
+                busy={busy}
+              />
+            ))}
           </div>
         )}
 

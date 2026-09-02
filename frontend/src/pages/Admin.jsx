@@ -694,8 +694,8 @@ function Teams({ token, run, flash, eventId }) {
               <strong>{t.teamName}</strong> <span className="muted mono">{t.teamId}</span>
               <div className="muted" style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 2 }}>
                 <span>Points: <b style={{ color: "var(--gold)" }}>{t.points}</b> · Status: {t.status} · Level {t.currentLevel || 1} · Password:</span>
-                <span className="mono" style={{ background: "var(--bg-3)", padding: "2px 6px", borderRadius: 4, color: "var(--gold)" }}>
-                  {showPassMap[t._id] ? (t.plainPassword || "N/A") : "••••••"}
+                <span className="mono" style={{ background: "var(--bg-3)", padding: "2px 6px", borderRadius: 4, color: "var(--gold)", fontWeight: 700 }}>
+                  {showPassMap[t._id] ? (t.plainPassword || t.password || "(Hidden Hash)") : "••••••"}
                 </span>
                 <button
                   type="button"
@@ -887,6 +887,70 @@ function Assignments({ token, run, eventId }) {
 }
 
 /* ------------------------------------------------------------------ */
+
+function ClueListItem({ clue, token, run, flash, remove, load }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div
+      className="card"
+      style={{
+        background: "var(--bg-2)",
+        padding: 12,
+        marginBottom: 8,
+        cursor: "pointer",
+        borderLeft: expanded ? "4px solid var(--gold)" : "none",
+      }}
+      onClick={() => setExpanded(!expanded)}
+    >
+      <div className="spread">
+        <div>
+          <strong>#{clue.clueNumber} {clue.title}</strong> — {clue.points} pts ({clue.checkpointName})
+          {clue.isFinal && <span className="pill ok" style={{ marginLeft: 8, fontSize: 11 }}>🏆 FINAL TREASURE CLUE</span>}
+          <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
+            {expanded ? "▲ Click to hide details" : "▼ Click to reveal riddle, answers & hints"}
+          </div>
+        </div>
+        <div className="row" style={{ gap: 6 }} onClick={(e) => e.stopPropagation()}>
+          <button
+            className={`btn small ${clue.isFinal ? "ok" : "secondary"}`}
+            onClick={async () => {
+              await run(() => api.put(`/admin/clues/${clue._id}`, { isFinal: !clue.isFinal }, { token }));
+              flash(clue.isFinal ? "Unmarked as final clue" : "Marked as final clue!");
+              load().catch(() => {});
+            }}
+          >
+            {clue.isFinal ? "🏆 Final Clue" : "Make Final"}
+          </button>
+          <button className="btn small danger" onClick={() => remove(clue._id)}>Delete</button>
+        </div>
+      </div>
+
+      {expanded && (
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)", fontSize: 13 }} onClick={(e) => e.stopPropagation()}>
+          <p style={{ margin: "0 0 8px", lineHeight: 1.5 }}>
+            <strong>📜 Riddle / Question:</strong> {clue.description}
+          </p>
+          <p style={{ margin: "0 0 8px" }}>
+            <strong>🔑 Correct Answer:</strong> <span className="mono" style={{ color: "var(--gold)" }}>{clue.correctAnswer || "None"}</span>
+          </p>
+          {(clue.hints || []).length > 0 && (
+            <div>
+              <strong>💡 Hints:</strong>
+              <ul style={{ margin: "4px 0 0", paddingLeft: 20 }}>
+                {clue.hints.map((h, i) => (
+                  <li key={i}>
+                    Hint {i + 1}: "{h.text}" (-{h.penalty} pts)
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function Clues({ token, run, flash, eventId }) {
   const [clues, setClues] = useState([]);
@@ -1087,27 +1151,7 @@ function Clues({ token, run, flash, eventId }) {
       )}
 
       {clues.map((c) => (
-        <div key={c._id} className="card" style={{ background: "var(--bg-2)", padding: 12, marginBottom: 8 }}>
-          <div className="spread">
-            <div>
-              <strong>#{c.clueNumber} {c.title}</strong> — {c.points} pts ({c.checkpointName})
-              {c.isFinal && <span className="pill ok" style={{ marginLeft: 8, fontSize: 11 }}>🏆 FINAL TREASURE CLUE</span>}
-            </div>
-            <div className="row" style={{ gap: 6 }}>
-              <button
-                className={`btn small ${c.isFinal ? "ok" : "secondary"}`}
-                onClick={async () => {
-                  await run(() => api.put(`/admin/clues/${c._id}`, { isFinal: !c.isFinal }, { token }));
-                  flash(c.isFinal ? "Unmarked as final clue" : "Marked as final clue!");
-                  load().catch(() => {});
-                }}
-              >
-                {c.isFinal ? "🏆 Final Clue" : "Make Final"}
-              </button>
-              <button className="btn small danger" onClick={() => remove(c._id)}>Delete</button>
-            </div>
-          </div>
-        </div>
+        <ClueListItem key={c._id} clue={c} token={token} run={run} flash={flash} remove={remove} load={load} />
       ))}
     </div>
   );
@@ -1290,6 +1334,44 @@ function QRCodes({ token, run, flash, eventId }) {
 
 /* ------------------------------------------------------------------ */
 
+function SideQuestListItem({ quest }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div
+      className="card"
+      style={{
+        background: "var(--bg-2)",
+        padding: 12,
+        marginBottom: 8,
+        cursor: "pointer",
+        borderLeft: expanded ? "4px solid var(--gold)" : "none",
+      }}
+      onClick={() => setExpanded(!expanded)}
+    >
+      <div className="spread">
+        <div>
+          <strong>🎯 {quest.title}</strong> (+{quest.points} pts) — Code Reward: <span className="mono" style={{ color: "var(--gold)" }}>{quest.secretCodeReward || "None"}</span>
+          <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
+            {expanded ? "▲ Click to collapse question" : "▼ Click to reveal question & answer"}
+          </div>
+        </div>
+      </div>
+
+      {expanded && (
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)", fontSize: 13 }}>
+          <p style={{ margin: "0 0 8px", lineHeight: 1.5 }}>
+            <strong>📜 Question / Riddle:</strong> {quest.description}
+          </p>
+          <p style={{ margin: 0 }}>
+            <strong>🔑 Answer:</strong> <span className="mono" style={{ color: "var(--gold)" }}>{quest.answer || "N/A"}</span>
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function SideQuests({ token, run, flash, eventId }) {
   const [quests, setQuests] = useState([]);
 
@@ -1443,9 +1525,7 @@ function SideQuests({ token, run, flash, eventId }) {
       </form>
 
       {quests.map((q) => (
-        <div key={q._id} className="card" style={{ background: "var(--bg-2)", padding: 12, marginBottom: 8 }}>
-          <strong>{q.title}</strong> (+{q.points} pts) — Code Reward: <span className="mono">{q.secretCodeReward || "None"}</span>
-        </div>
+        <SideQuestListItem key={q._id} quest={q} />
       ))}
     </div>
   );

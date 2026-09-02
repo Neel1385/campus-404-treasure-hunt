@@ -20,14 +20,17 @@ export default function GrandLineMap() {
 
   useEffect(() => {
     if (!token) return;
-    Promise.all([
-      api.get("/teams/me", { token }),
-      api.get("/event/status"),
-    ]).then(([meData, evData]) => {
-      setMe(meData);
-      setTotalLevels(meData.totalLevels || meData.totalClues || 0);
-      setIslandNames(evData.event?.islandNames || {});
-    }).catch(() => setError("Could not load Grand Line map data."));
+    api.get("/teams/me", { token })
+      .then((meData) => {
+        setMe(meData);
+        setTotalLevels(meData.totalLevels || meData.totalClues || 0);
+        if (meData.team?.eventId) {
+          api.get(`/events/${meData.team.eventId}`, { token })
+            .then((evData) => setIslandNames(evData.islandNames || {}))
+            .catch(() => {});
+        }
+      })
+      .catch(() => setError("Could not load Grand Line map data."));
   }, [token]);
 
   const getIslandName = (level, total) => {
