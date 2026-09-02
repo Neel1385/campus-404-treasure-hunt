@@ -75,6 +75,7 @@ const register = asyncHandler(async (req, res) => {
     teamName: String(body.teamName).trim(),
     members,
     passwordHash: String(body.password),
+    plainPassword: String(body.password),
     role: "player",
   });
 
@@ -99,25 +100,25 @@ const login = asyncHandler(async (req, res) => {
 
   const text = String(identifier).trim();
 
-  // Allow seamless Admin authentication from standard login
-  let team = await Team.findOne({
-    $or: [
-      { role: "admin", email: text.toLowerCase() },
-      { role: "admin", teamName: text },
-      { role: "admin", teamId: text.toUpperCase() },
-    ],
+  // Explicitly reject admin accounts attempting to log in via player login endpoint
+  const adminCheck = await Team.findOne({
+    $or: [{ teamId: text.toUpperCase() }, { teamName: text }, { email: text.toLowerCase() }],
+    role: "admin",
   }).select("+passwordHash");
 
-  if (!team) {
-    const query = {
-      role: "player",
-      $or: [{ teamId: text.toUpperCase() }, { teamName: text }],
-    };
-    if (eventId) {
-      query.eventId = eventId;
-    }
-    team = await Team.findOne(query).select("+passwordHash");
+  if (adminCheck && (await adminCheck.comparePassword(password))) {
+    throw new ApiError("Admin accounts must log in through the Admin Portal (/admin/login).", 403, "ADMIN_LOGIN_DISALLOWED");
   }
+
+  const query = {
+    role: "player",
+    $or: [{ teamId: text.toUpperCase() }, { teamName: text }],
+  };
+  if (eventId) {
+    query.eventId = eventId;
+  }
+
+  const team = await Team.findOne(query).select("+passwordHash");
 
   if (!team || !(await team.comparePassword(password))) {
     throw new ApiError("Invalid credentials.", 401, "INVALID_CREDENTIALS");

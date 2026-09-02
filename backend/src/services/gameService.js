@@ -57,6 +57,7 @@ async function bulkGenerateTeams(eventId, count = 5, prefix = "TEAM", adminTeam)
       teamId,
       teamName,
       passwordHash: rawPassword,
+      plainPassword: rawPassword,
       role: "player",
       members: [
         { fullName: `Leader ${i}`, collegeId: `ID-L${i}` },

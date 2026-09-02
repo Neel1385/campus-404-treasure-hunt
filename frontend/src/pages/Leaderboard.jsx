@@ -77,9 +77,13 @@ export default function Leaderboard() {
                   <tr
                     key={t.teamId}
                     className={team && t.teamId === team.teamId ? "me" : ""}
-                    onClick={() => setSelectedTeam(t)}
-                    style={{ cursor: "pointer" }}
-                    title="Click to inspect team details"
+                    onClick={() => {
+                      if (team && (team.teamId === t.teamId || team.role === "admin")) {
+                        setSelectedTeam(t);
+                      }
+                    }}
+                    style={{ cursor: team && (team.teamId === t.teamId || team.role === "admin") ? "pointer" : "default" }}
+                    title={team && (team.teamId === t.teamId || team.role === "admin") ? "Click to view team details" : ""}
                   >
                     <td className="rank">{rankEmoji(t.rank)}</td>
                     <td>

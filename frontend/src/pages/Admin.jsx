@@ -66,6 +66,7 @@ export default function Admin() {
   const navItems = [
     ["overview", "⚓ Overview & Events"],
     ["teams", "🏴‍☠️ Teams Control"],
+    ["assignments", "🔀 Assigned Clues"],
     ["clues", "📜 Clues & Pool"],
     ["qrs", "🗺️ QR Codes"],
     ["sidequests", "🎯 Side Quests"],
@@ -202,6 +203,7 @@ export default function Admin() {
           />
         )}
         {tab === "teams" && <Teams token={token} run={run} flash={flash} eventId={selectedEventId} />}
+        {tab === "assignments" && <Assignments token={token} run={run} eventId={selectedEventId} />}
         {tab === "clues" && <Clues token={token} run={run} flash={flash} eventId={selectedEventId} />}
         {tab === "qrs" && <QRCodes token={token} run={run} flash={flash} eventId={selectedEventId} />}
         {tab === "sidequests" && <SideQuests token={token} run={run} flash={flash} eventId={selectedEventId} />}
@@ -289,10 +291,15 @@ function Overview({ token, run, flash, selectedEventId, setSelectedEventId }) {
     loadEvents().catch(() => {});
   };
 
+  const [cluesPerTeamInput, setCluesPerTeamInput] = useState(5);
+
   const generateAssignments = async () => {
     if (!selectedEventId) return;
+    await run(() => api.put(`/events/${selectedEventId}`, {
+      settings: { ...event?.settings, cluesPerTeam: Number(cluesPerTeamInput) }
+    }, { token }));
     const res = await run(() => api.post(`/events/${selectedEventId}/generate-assignments`, {}, { token }));
-    flash(`Generated clue assignments for ${res.teamsProcessed || 0} team(s)!`);
+    flash(`Generated ${cluesPerTeamInput} clue assignments for ${res.teamsProcessed || 0} team(s)!`);
   };
 
   const saveSettings = async (e) => {
@@ -316,6 +323,17 @@ function Overview({ token, run, flash, selectedEventId, setSelectedEventId }) {
             </p>
           </div>
           <div className="row" style={{ gap: 8 }}>
+            <div className="row" style={{ gap: 4 }}>
+              <span style={{ fontSize: 12, color: "var(--muted)" }}>Clues/Team:</span>
+              <input
+                type="number"
+                min="1"
+                max="20"
+                value={cluesPerTeamInput}
+                onChange={(e) => setCluesPerTeamInput(e.target.value)}
+                style={{ width: 55, padding: "4px 8px" }}
+              />
+            </div>
             <button className="btn small secondary" onClick={generateAssignments}>
               🎲 Generate Clue Assignments
             </button>
@@ -557,6 +575,7 @@ function Teams({ token, run, flash, eventId }) {
   const [pointsMap, setPointsMap] = useState({});
   const [unlockMap, setUnlockMap] = useState({});
   const [passMap, setPassMap] = useState({});
+  const [showPassMap, setShowPassMap] = useState({});
   const [bulkCount, setBulkCount] = useState(5);
   const [generatedTeams, setGeneratedTeams] = useState(null);
   const [showAddTeam, setShowAddTeam] = useState(false);
@@ -581,8 +600,9 @@ function Teams({ token, run, flash, eventId }) {
 
   const handleBulkGenerate = async () => {
     const res = await run(() => api.post(`/events/${eventId}/bulk-teams`, { count: Number(bulkCount) }, { token }));
-    setGeneratedTeams(res.teams || res || []);
-    flash(`Bulk generated ${res.teams?.length || count} teams!`);
+    const newTeams = res.teams || res || [];
+    setGeneratedTeams((prev) => (prev ? [...prev, ...newTeams] : newTeams));
+    flash(`Bulk generated ${newTeams.length} teams!`);
     load().catch(() => {});
   };
 
@@ -672,8 +692,20 @@ function Teams({ token, run, flash, eventId }) {
           <div className="spread">
             <div>
               <strong>{t.teamName}</strong> <span className="muted mono">{t.teamId}</span>
-              <div className="muted" style={{ fontSize: 13 }}>
-                Points: <b style={{ color: "var(--gold)" }}>{t.points}</b> · Status: {t.status} · Level {t.currentLevel || 1}
+              <div className="muted" style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 2 }}>
+                <span>Points: <b style={{ color: "var(--gold)" }}>{t.points}</b> · Status: {t.status} · Level {t.currentLevel || 1} · Password:</span>
+                <span className="mono" style={{ background: "var(--bg-3)", padding: "2px 6px", borderRadius: 4, color: "var(--gold)" }}>
+                  {showPassMap[t._id] ? (t.plainPassword || "N/A") : "••••••"}
+                </span>
+                <button
+                  type="button"
+                  className="btn small ghost"
+                  style={{ padding: "2px 6px", fontSize: 11 }}
+                  onClick={() => setShowPassMap((prev) => ({ ...prev, [t._id]: !prev[t._id] }))}
+                  title="Toggle Password Visibility"
+                >
+                  {showPassMap[t._id] ? "🙈 Hide" : "👁️ Show"}
+                </button>
               </div>
             </div>
             <div className="row" style={{ gap: 6 }}>
@@ -742,6 +774,114 @@ function Teams({ token, run, flash, eventId }) {
           </div>
         </div>
       ))}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+function Assignments({ token, run, eventId }) {
+  const [assignments, setAssignments] = useState([]);
+  const [search, setSearch] = useState("");
+
+  if (!eventId) {
+    return (
+      <div className="card alert warn">
+        ⚠️ <strong>No Active Event Selected:</strong> Please select or create an event using the Event Context bar above to view assigned clue sequences.
+      </div>
+    );
+  }
+
+  const load = useCallback(async () => {
+    try {
+      const data = await run(() => api.get(`/events/${eventId}/clue-assignments`, { token }));
+      setAssignments(Array.isArray(data) ? data : []);
+    } catch {
+      setAssignments([]);
+    }
+  }, [token, eventId, run]);
+
+  useEffect(() => {
+    load().catch(() => {});
+  }, [load]);
+
+  // Group assignments by team
+  const teamsMap = {};
+  for (const a of assignments) {
+    const tId = a.teamId?._id || a.teamId || "unknown";
+    const teamName = a.teamId?.teamName || "Unknown Team";
+    const teamCode = a.teamId?.teamId || "";
+    if (!teamsMap[tId]) {
+      teamsMap[tId] = { teamName, teamCode, seq: [] };
+    }
+    teamsMap[tId].seq.push(a);
+  }
+
+  const teamList = Object.values(teamsMap).filter(
+    (t) => !search || (t.teamName + t.teamCode).toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div className="card">
+      <div className="spread" style={{ marginBottom: 12 }}>
+        <div>
+          <h3 style={{ margin: 0, color: "var(--gold)" }}>🔀 Team Clue Sequence Inspector</h3>
+          <p className="muted" style={{ fontSize: 13, marginTop: 4 }}>
+            Review assigned clue orders across all teams for the active event.
+          </p>
+        </div>
+        <input
+          style={{ maxWidth: 220 }}
+          placeholder="Filter team..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
+
+      {teamList.length === 0 ? (
+        <div className="card muted" style={{ textAlign: "center", padding: 20 }}>
+          No clue assignments generated for this event yet. Go to ⚓ Overview & Events and click 🎲 Generate Clue Assignments!
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {teamList.map((t, idx) => (
+            <div key={idx} className="card" style={{ background: "var(--bg-2)", padding: 14 }}>
+              <div style={{ fontWeight: 700, fontSize: 16, color: "var(--gold)", marginBottom: 8 }}>
+                🏴‍☠️ {t.teamName} <span className="muted mono" style={{ fontSize: 13 }}>({t.teamCode})</span>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {t.seq
+                  .sort((a, b) => a.sequenceNumber - b.sequenceNumber)
+                  .map((item) => (
+                    <div
+                      key={item._id}
+                      style={{
+                        background: item.isFinal ? "var(--gold-dark, #78350f)" : "var(--bg-3, #334155)",
+                        border: item.isFinal ? "1px solid var(--gold)" : "1px solid var(--border)",
+                        borderRadius: 6,
+                        padding: "8px 12px",
+                        fontSize: 13,
+                        minWidth: 140,
+                      }}
+                    >
+                      <div style={{ fontSize: 11, color: item.isFinal ? "var(--gold)" : "var(--muted)", fontWeight: 700 }}>
+                        STEP {item.sequenceNumber} {item.isFinal ? "🏆 FINAL" : ""}
+                      </div>
+                      <div style={{ fontWeight: 600, marginTop: 2 }}>
+                        {item.clueId ? `#${item.clueId.clueNumber} ${item.clueId.title}` : "Clue Deleted"}
+                      </div>
+                      {item.clueId?.checkpointName && (
+                        <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>
+                          📍 {item.clueId.checkpointName}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }
@@ -884,11 +1024,33 @@ function Clues({ token, run, flash, eventId }) {
                 if (trimmed.startsWith("[")) {
                   parsed = JSON.parse(trimmed);
                 } else {
-                  // CSV Parser
-                  const lines = trimmed.split("\n").map((l) => l.trim()).filter(Boolean);
-                  const headers = lines[0].split(",").map((h) => h.trim());
+                  // CSV Parser supporting quoted fields with commas
+                  const parseCSVLine = (text) => {
+                    const result = [];
+                    let cur = "";
+                    let inQuotes = false;
+                    for (let i = 0; i < text.length; i++) {
+                      const char = text[i];
+                      if (char === '"' && text[i + 1] === '"') {
+                        cur += '"';
+                        i++;
+                      } else if (char === '"') {
+                        inQuotes = !inQuotes;
+                      } else if (char === ',' && !inQuotes) {
+                        result.push(cur.trim());
+                        cur = "";
+                      } else {
+                        cur += char;
+                      }
+                    }
+                    result.push(cur.trim());
+                    return result;
+                  };
+
+                  const lines = trimmed.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+                  const headers = parseCSVLine(lines[0]);
                   parsed = lines.slice(1).map((line) => {
-                    const values = line.split(",").map((v) => v.trim());
+                    const values = parseCSVLine(line);
                     const obj = {};
                     headers.forEach((h, idx) => {
                       let val = values[idx] || "";
@@ -982,6 +1144,23 @@ function QRCodes({ token, run, flash, eventId }) {
 
   const [logoUrl, setLogoUrl] = useState("");
   const [customText, setCustomText] = useState("");
+  const [bulkQRType, setBulkQRType] = useState("DUMMY");
+  const [bulkQRCount, setBulkQRCount] = useState(5);
+  const [bulkQRPoints, setBulkQRCountPoints] = useState(10);
+  const [showBulkQR, setShowBulkQR] = useState(false);
+
+  const handleBulkQR = async () => {
+    const query = eventId ? `?eventId=${eventId}` : "";
+    await run(() => api.post(`/admin/qrcodes/bulk${query}`, {
+      type: bulkQRType,
+      count: Number(bulkQRCount),
+      points: Number(bulkQRPoints),
+      eventId,
+    }, { token }));
+    flash(`Generated ${bulkQRCount} ${bulkQRType} QR codes!`);
+    setShowBulkQR(false);
+    load().catch(() => {});
+  };
 
   const generate = async () => {
     if (!selectedClue) return flash("Select a clue first");
@@ -1008,6 +1187,9 @@ function QRCodes({ token, run, flash, eventId }) {
       <div className="spread" style={{ marginBottom: 12 }}>
         <div className="row" style={{ gap: 12 }}>
           <h3 style={{ color: "var(--gold)", margin: 0 }}>🗺️ Event QR Codes ({qrs.length})</h3>
+          <button className="btn small secondary" onClick={() => setShowBulkQR(!showBulkQR)}>
+            ⚡ Bulk QR Generator
+          </button>
           <button
             className="btn small secondary"
             onClick={() => {
@@ -1047,6 +1229,36 @@ function QRCodes({ token, run, flash, eventId }) {
           <button className="btn small" onClick={generate}>Generate QR</button>
         </div>
       </div>
+
+      {showBulkQR && (
+        <div style={{ background: "var(--bg-2)", padding: 12, borderRadius: 6, marginBottom: 16 }}>
+          <h4 style={{ margin: "0 0 8px", color: "var(--gold)" }}>⚡ Bulk Generate Dummy, Trap & Bonus QR Codes</h4>
+          <div className="row" style={{ gap: 8 }}>
+            <select value={bulkQRType} onChange={(e) => setBulkQRType(e.target.value)}>
+              <option value="DUMMY">Dummy QR (Wrong Checkpoint)</option>
+              <option value="TRAP">Trap QR (Deducts Points)</option>
+              <option value="BONUS">Bonus QR (Awards Points)</option>
+            </select>
+            <input
+              type="number"
+              min="1"
+              max="50"
+              value={bulkQRCount}
+              onChange={(e) => setBulkQRCount(e.target.value)}
+              placeholder="Count"
+              style={{ width: 80 }}
+            />
+            <input
+              type="number"
+              value={bulkQRPoints}
+              onChange={(e) => setBulkQRCountPoints(e.target.value)}
+              placeholder="Points/Penalty"
+              style={{ width: 110 }}
+            />
+            <button className="btn small" onClick={handleBulkQR}>Generate Bulk QRs</button>
+          </div>
+        </div>
+      )}
 
       {qrs.map((qr) => (
         <div key={qr._id} className="card" style={{ background: "var(--bg-2)", padding: 14, marginBottom: 8 }}>
@@ -1171,10 +1383,32 @@ function SideQuests({ token, run, flash, eventId }) {
                 if (trimmed.startsWith("[")) {
                   parsed = JSON.parse(trimmed);
                 } else {
-                  const lines = trimmed.split("\n").map((l) => l.trim()).filter(Boolean);
-                  const headers = lines[0].split(",").map((h) => h.trim());
+                  const parseCSVLine = (text) => {
+                    const result = [];
+                    let cur = "";
+                    let inQuotes = false;
+                    for (let i = 0; i < text.length; i++) {
+                      const char = text[i];
+                      if (char === '"' && text[i + 1] === '"') {
+                        cur += '"';
+                        i++;
+                      } else if (char === '"') {
+                        inQuotes = !inQuotes;
+                      } else if (char === ',' && !inQuotes) {
+                        result.push(cur.trim());
+                        cur = "";
+                      } else {
+                        cur += char;
+                      }
+                    }
+                    result.push(cur.trim());
+                    return result;
+                  };
+
+                  const lines = trimmed.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+                  const headers = parseCSVLine(lines[0]);
                   parsed = lines.slice(1).map((line) => {
-                    const values = line.split(",").map((v) => v.trim());
+                    const values = parseCSVLine(line);
                     const obj = {};
                     headers.forEach((h, idx) => {
                       let val = values[idx] || "";

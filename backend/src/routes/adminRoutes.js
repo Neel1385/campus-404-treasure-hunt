@@ -48,6 +48,7 @@ router.delete("/clues/:id", deleteClue);
 router.get("/qrcodes", listQRCodes);
 router.post("/qrcodes", createQRCode);
 router.post("/qrcodes/generate", generateQR);
+router.post("/qrcodes/bulk", require("../controllers/adminController").bulkCreateQRCodes);
 router.patch("/qrcodes/:id/toggle", toggleQR);
 
 router.get("/submissions", listSubmissions);

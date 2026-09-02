@@ -198,6 +198,7 @@ const updateTeamPassword = asyncHandler(async (req, res) => {
     return res.status(400).json({ success: false, message: "Password must be at least 4 characters.", code: "VALIDATION_ERROR" });
   }
   team.passwordHash = newPassword;
+  team.plainPassword = newPassword;
   await team.save();
   await writeAudit(req.team, "TEAM_PASSWORD_CHANGED", "Team", String(team._id), undefined, "Updated", `Password updated by admin`, team.eventId);
   return success(res, { teamId: team.teamId }, "Team password updated.");
@@ -315,6 +316,28 @@ const listQRCodes = asyncHandler(async (req, res) => {
   return success(res, { qrcodes: qrs, frontendUrl }, "QR codes");
 });
 
+const bulkCreateQRCodes = asyncHandler(async (req, res) => {
+  const eventId = await resolveEventId(req);
+  const { type = "DUMMY", count = 5, points = 0, checkpointPrefix = "Checkpoint" } = req.body || {};
+
+  const created = [];
+  for (let i = 1; i <= Number(count); i++) {
+    const qrId = await qrService.uniqueQRId();
+    const qr = await QRCode.create({
+      eventId,
+      qrId,
+      type,
+      points: Number(points) || 0,
+      checkpointName: `${checkpointPrefix} ${i}`,
+      active: true,
+    });
+    created.push(qr);
+  }
+
+  await writeAudit(req.team, "BULK_QR_CREATED", "QRCode", "", undefined, { type, count }, `Bulk generated ${count} ${type} QR codes`, eventId);
+  return success(res, { qrcodes: created }, `Generated ${created.length} ${type} QR codes.`, 201);
+});
+
 const createQRCode = asyncHandler(async (req, res) => {
   const eventId = await resolveEventId(req);
   const body = req.body || {};
@@ -414,7 +437,8 @@ const setEventStatus = asyncHandler(async (req, res) => {
 });
 
 const updateSettings = asyncHandler(async (req, res) => {
-  const event = await eventService.updateEventSettings(req.team, req.body || {});
+  const eventId = await resolveEventId(req);
+  const event = await eventService.updateEventSettings(req.team, req.body || {}, eventId);
   return success(res, { event }, "Settings updated");
 });
 
@@ -504,6 +528,7 @@ module.exports = {
   createQRCode,
   toggleQR,
   generateQR,
+  bulkCreateQRCodes,
   listSubmissions,
   listScans,
   eventControl,

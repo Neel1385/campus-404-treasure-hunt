@@ -109,6 +109,7 @@ export default function GrandLineMap() {
                 <div key={level}>
                   <div
                     className={`island-node ${isCompleted ? "completed" : ""} ${isCurrent ? "current" : ""} ${isLocked ? "locked" : ""}`}
+                    style={isLocked ? { filter: "blur(3px) opacity(0.4)", pointerEvents: "none", userSelect: "none" } : {}}
                   >
                     <div className="island-icon">{icon}</div>
                     <div className="island-info">

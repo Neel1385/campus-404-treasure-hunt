@@ -17,6 +17,18 @@ router.get("/", async (req, res, next) => {
   }
 });
 
+router.get("/:eventId/clue-assignments", protect, adminOnly, enforceEventIsolation, async (req, res, next) => {
+  try {
+    const assignments = await TeamClueAssignment.find({ eventId: req.params.eventId })
+      .populate("teamId", "teamId teamName")
+      .populate("clueId", "clueNumber title checkpointName points")
+      .sort({ sequenceNumber: 1 });
+    res.json({ success: true, data: assignments });
+  } catch (err) {
+    next(err);
+  }
+});
+
 router.post("/", protect, adminOnly, async (req, res, next) => {
   try {
     const event = await Event.create(req.body);
@@ -45,7 +57,17 @@ router.get("/:eventId", protect, enforceEventIsolation, async (req, res, next) =
 
 router.put("/:eventId", protect, adminOnly, enforceEventIsolation, async (req, res, next) => {
   try {
-    const event = await Event.findByIdAndUpdate(req.params.eventId, req.body, { new: true });
+    const existing = await Event.findById(req.params.eventId);
+    if (!existing) {
+      return res.status(404).json({ success: false, message: "Event not found" });
+    }
+
+    const body = req.body || {};
+    if (body.settings) {
+      body.settings = { ...(existing.settings ? existing.settings.toObject() : {}), ...body.settings };
+    }
+
+    const event = await Event.findByIdAndUpdate(req.params.eventId, { $set: body }, { new: true, runValidators: true });
     eventBus.publish(DOMAIN_EVENTS.EVENT_UPDATED, { eventId: event._id });
     res.json({ success: true, data: event });
   } catch (err) {
