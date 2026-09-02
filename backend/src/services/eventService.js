@@ -59,13 +59,17 @@ function assertEventActive(event) {
 }
 
 // Admin: start / pause / resume / end.
-async function setEventStatus(adminOrId, status, note) {
+async function setEventStatus(adminOrId, status, eventIdArg, noteArg) {
   let admin = null;
   let eventId = null;
+  let note = noteArg;
+
   if (adminOrId && adminOrId._id) {
     admin = adminOrId;
-  } else if (adminOrId) {
+    eventId = eventIdArg;
+  } else {
     eventId = adminOrId;
+    note = status;
   }
 
   const event = await getEventById(eventId);

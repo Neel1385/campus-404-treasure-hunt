@@ -695,7 +695,7 @@ function Teams({ token, run, flash, eventId }) {
               <div className="muted" style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 2 }}>
                 <span>Points: <b style={{ color: "var(--gold)" }}>{t.points}</b> · Status: {t.status} · Level {t.currentLevel || 1} · Password:</span>
                 <span className="mono" style={{ background: "var(--bg-3)", padding: "2px 6px", borderRadius: 4, color: "var(--gold)", fontWeight: 700 }}>
-                  {showPassMap[t._id] ? (t.plainPassword || t.password || "(Hidden Hash)") : "••••••"}
+                  {showPassMap[t._id] ? (t.plainPassword || t.password || "(Reset password to view)") : "••••••"}
                 </span>
                 <button
                   type="button"
@@ -1236,21 +1236,31 @@ function QRCodes({ token, run, flash, eventId }) {
           </button>
           <button
             className="btn small secondary"
-            onClick={() => {
-              const csvContent = "data:text/csv;charset=utf-8," +
-                ["QR ID,Type,Checkpoint,Scan Count,Active"]
-                  .concat(qrs.map((q) => `${q.qrId},${q.type},${q.checkpointName || ""},${q.scanCount || 0},${q.active}`))
-                  .join("\n");
-              const encodedUri = encodeURI(csvContent);
-              const link = document.createElement("a");
-              link.setAttribute("href", encodedUri);
-              link.setAttribute("download", `event_${eventId}_qrcodes.csv`);
-              document.body.appendChild(link);
-              link.click();
-              document.body.removeChild(link);
+            onClick={async () => {
+              try {
+                flash("Generating QR Images Package...");
+                const data = await run(() => api.get(`/events/${eventId}/qrcodes/zip`, { token }));
+                const list = data.qrcodes || [];
+                if (list.length === 0) return flash("No QR codes to download.");
+
+                // Download individual PNG images or package
+                for (let i = 0; i < list.length; i++) {
+                  const item = list[i];
+                  const a = document.createElement("a");
+                  a.href = item.dataUrl;
+                  a.download = `QR_${item.qrId}_${item.type}_${(item.checkpointName || "Checkpoint").replace(/[^a-zA-Z0-9]/g, "_")}.png`;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  await new Promise((r) => setTimeout(r, 150));
+                }
+                flash(`Downloaded ${list.length} QR Code PNG Images!`);
+              } catch (err) {
+                flash(`Download Error: ${err.message}`);
+              }
             }}
           >
-            📥 Download All QR Codes
+            🖼️ Download All QR Images (PNG)
           </button>
         </div>
         <div className="row" style={{ gap: 8 }}>

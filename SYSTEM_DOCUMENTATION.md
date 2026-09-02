@@ -53,7 +53,7 @@ CAMPUS 404 is an **event-centric, event-driven, and offline-first** QR code trea
 - **Dropdown & `Generate QR` Button:** Generate a QR code linked to a clue.
 - **`Logo Image URL` & `Overlay Description Text` Inputs:** Add custom branding overlays.
 - **`⚡ Bulk QR Generator` Controls:** Mass generate Dummy, Trap (points penalty), or Bonus (points award) QR codes.
-- **`📥 Download All QR Codes` Button:** Export QR codes into a CSV spreadsheet.
+- **`🖼️ Download All QR Images (PNG)` Button:** Export and download generated QR code PNG images with custom checkpoint names and type tags.
 
 ### **F. Side Quests Tab (`🎯 Side Quests`)**
 - **`+ Create Side Quest` Form:** Create extra riddles with point rewards and `Secret Code Fragment Rewards` (e.g. `X7`).
@@ -93,6 +93,7 @@ CAMPUS 404 is an **event-centric, event-driven, and offline-first** QR code trea
 2. **Player Dashboard (`/dashboard`):**
    - Displays Team Name, Team ID, Total Points, Current Level, Wrong Scans, Timer, and Collected Secret Code Fragments.
    - **Clue Challenge Card:** Displays assigned checkpoint location. Once QR is scanned, the clue description and answer submission form appear.
+   - **Timer & Time Is Up Lockout:** Real-time countdown timer tracking event duration. When time expires, a prominent `⏰ TIME IS UP!` banner locks all submission forms and QR scans.
    - **Secret Code Fragments & Physical Chest Form:** Shows collected fragment badges and a submission input to unlock the final physical treasure chest.
    - **Side Quests Section:** Solve extra riddles to earn points and code fragments.
    - **Score History Table:** Displays personal score transaction history (`+Points`, `-Penalties`).

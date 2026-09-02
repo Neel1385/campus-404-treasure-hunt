@@ -23,10 +23,14 @@ async function checkTeamBlocked(team) {
       team.remainingBlockedScans -= 1;
       if (team.remainingBlockedScans === 0 && !team.blockedUntil) {
         team.blocked = false;
+        const currentReason = team.blockReason;
         team.blockReason = "";
         await team.save();
         eventBus.publish(DOMAIN_EVENTS.TEAM_UNBLOCKED, { eventId: team.eventId, teamId: team._id });
-        return;
+        const err = new Error(currentReason || "Your team was blocked from performing game actions.");
+        err.status = 403;
+        err.code = "TEAM_BLOCKED";
+        throw err;
       }
       await team.save();
     }

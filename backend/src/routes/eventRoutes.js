@@ -3,6 +3,7 @@ const router = express.Router();
 const { protect, adminOnly, enforceEventIsolation } = require("../middleware/authMiddleware");
 const eventService = require("../services/eventService");
 const gameService = require("../services/gameService");
+const qrService = require("../services/qrService");
 const { Event, Team, Clue, SideQuest, QRCode, ScoreTransaction, AuditLog, TeamClueAssignment } = require("../models");
 const { eventBus, DOMAIN_EVENTS } = require("../events/eventBus");
 
@@ -256,6 +257,31 @@ router.get("/:eventId/leaderboard", protect, enforceEventIsolation, async (req, 
     const leaderboardService = require("../services/leaderboardService");
     const data = await leaderboardService.getEventLeaderboard(req.params.eventId);
     res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/:eventId/qrcodes/zip", protect, adminOnly, enforceEventIsolation, async (req, res, next) => {
+  try {
+    const qrcode = require("qrcode");
+    const qrs = await QRCode.find({ eventId: req.params.eventId }).populate("clueId", "clueNumber title");
+
+    res.setHeader("Content-Type", "application/json");
+    const qrDataList = [];
+
+    for (const qr of qrs) {
+      const url = qrService.qrUrl(qr.qrId);
+      const dataDataUrl = await qrcode.toDataURL(url, { errorCorrectionLevel: "H", margin: 2, width: 300 });
+      qrDataList.push({
+        qrId: qr.qrId,
+        type: qr.type,
+        checkpointName: qr.checkpointName || (qr.clueId ? qr.clueId.title : ""),
+        dataUrl: dataDataUrl,
+      });
+    }
+
+    res.json({ success: true, data: { qrcodes: qrDataList } });
   } catch (err) {
     next(err);
   }

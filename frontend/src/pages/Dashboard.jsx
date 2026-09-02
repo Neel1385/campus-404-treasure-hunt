@@ -210,6 +210,7 @@ export default function Dashboard() {
 
   const teamData = me?.team || team;
   const isComplete = teamData?.status === "completed";
+  const isTimeUp = (me?.event?.remainingMs != null && me.event.remainingMs <= 0) || me?.event?.status === "ENDED" || currentEvent?.status === "ENDED";
   const unlocked = !!clue?.unlocked;
   const currentLevel = teamData?.currentLevel || teamData?.currentClue || 1;
   const totalLevels = me?.totalLevels || me?.totalClues || "?";
@@ -221,6 +222,32 @@ export default function Dashboard() {
       <div className="container">
         {error && <div className="alert error">{error}</div>}
         {notice && <div className="alert success">{notice}</div>}
+
+        {/* Time Is Up Banner / Lockout */}
+        {isTimeUp && (
+          <div
+            className="alert danger animate-fade-in"
+            style={{
+              padding: "24px 20px",
+              textAlign: "center",
+              marginBottom: 24,
+              border: "2px solid var(--danger)",
+              background: "rgba(225, 29, 72, 0.15)",
+              borderRadius: 8,
+            }}
+          >
+            <div style={{ fontSize: 40, marginBottom: 8 }}>⏰</div>
+            <h2 style={{ margin: 0, color: "var(--danger)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              TIME IS UP!
+            </h2>
+            <p style={{ margin: "8px 0 0", fontSize: 15, color: "var(--text)" }}>
+              The hunt timer has expired and the event has officially concluded. Game submissions and scans are now locked.
+            </p>
+            <div style={{ marginTop: 16 }}>
+              <Link to="/leaderboard" className="btn danger">🏆 View Final Standings</Link>
+            </div>
+          </div>
+        )}
 
         <div className="spread" style={{ marginBottom: 24 }}>
           <div>
@@ -283,9 +310,10 @@ export default function Dashboard() {
                 value={secretCodeInput}
                 onChange={(e) => setSecretCodeInput(e.target.value)}
                 style={{ flex: 1, minWidth: 200 }}
+                disabled={isTimeUp}
                 required
               />
-              <button className="btn ok" type="submit" disabled={busy}>
+              <button className="btn ok" type="submit" disabled={busy || isTimeUp}>
                 🔓 Unlock Physical Chest
               </button>
             </form>
@@ -330,9 +358,10 @@ export default function Dashboard() {
                     placeholder="Decipher the clue message..."
                     value={answer}
                     onChange={(e) => setAnswer(e.target.value)}
+                    disabled={isTimeUp}
                     required
                   />
-                  <button className="btn" type="submit" disabled={busy}>
+                  <button className="btn" type="submit" disabled={busy || isTimeUp}>
                     Submit
                   </button>
                 </form>
@@ -344,7 +373,7 @@ export default function Dashboard() {
                     </p>
                     <div className="row">
                       {clue.clue.hints.map((h, i) => (
-                        <button key={i} className="btn secondary small" onClick={() => useHint(i + 1)} disabled={busy}>
+                        <button key={i} className="btn secondary small" onClick={() => useHint(i + 1)} disabled={busy || isTimeUp}>
                           Hint {i + 1} (−{h.penalty} points)
                         </button>
                       ))}
@@ -382,7 +411,7 @@ export default function Dashboard() {
                 questAnswers={questAnswers}
                 setQuestAnswers={setQuestAnswers}
                 submitSideQuest={submitSideQuest}
-                busy={busy}
+                busy={busy || isTimeUp}
               />
             ))}
           </div>
