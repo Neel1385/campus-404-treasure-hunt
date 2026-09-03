@@ -1207,14 +1207,35 @@ function QRCodes({ token, run, flash, eventId }) {
   };
 
   const generate = async () => {
-    if (!selectedClue) return flash("Select a clue first");
+    if (!selectedClue) return flash("Select a clue first or choose ALL Clues.");
+    if (clues.length === 0) return flash("No clues created for this event yet. Create or upload clues first!");
+
     const query = eventId ? `?eventId=${eventId}` : "";
-    await run(() => api.post(`/admin/qrcodes/generate${query}`, {
-      clueId: selectedClue,
-      eventId,
-      branding: { logo: logoUrl, customText }
-    }, { token }));
-    flash("QR Code generated with custom branding");
+
+    if (selectedClue === "ALL") {
+      let createdCount = 0;
+      for (const clue of clues) {
+        try {
+          await run(() => api.post(`/admin/qrcodes/generate${query}`, {
+            clueId: clue._id,
+            eventId,
+            branding: { logo: logoUrl, customText }
+          }, { token }));
+          createdCount++;
+        } catch {
+          /* skip if QR already exists */
+        }
+      }
+      flash(`Generated QR Codes for all clues (${createdCount} processed)!`);
+    } else {
+      await run(() => api.post(`/admin/qrcodes/generate${query}`, {
+        clueId: selectedClue,
+        eventId,
+        branding: { logo: logoUrl, customText }
+      }, { token }));
+      flash("QR Code generated with custom branding");
+    }
+
     setLogoUrl("");
     setCustomText("");
     load().catch(() => {});
@@ -1266,6 +1287,7 @@ function QRCodes({ token, run, flash, eventId }) {
         <div className="row" style={{ gap: 8 }}>
           <select value={selectedClue} onChange={(e) => setSelectedClue(e.target.value)}>
             <option value="">— Select Clue —</option>
+            {clues.length > 0 && <option value="ALL">★ ALL Clues — Mass Generate QRs ★</option>}
             {clues.map((c) => <option key={c._id} value={c._id}>#{c.clueNumber} {c.title}</option>)}
           </select>
           <input
@@ -1283,6 +1305,12 @@ function QRCodes({ token, run, flash, eventId }) {
           <button className="btn small" onClick={generate}>Generate QR</button>
         </div>
       </div>
+
+      {clues.length === 0 && (
+        <div className="alert warn" style={{ marginBottom: 16 }}>
+          ⚠️ <strong>No clues created for this event yet.</strong> Use the 📜 Clues & Pool tab to create or bulk upload clues before generating clue QR codes!
+        </div>
+      )}
 
       {showBulkQR && (
         <div style={{ background: "var(--bg-2)", padding: 12, borderRadius: 6, marginBottom: 16 }}>

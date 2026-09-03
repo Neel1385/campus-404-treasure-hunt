@@ -30,7 +30,7 @@ export default function Leaderboard() {
     api
       .get(endpoint)
       .then((data) => {
-        const list = Array.isArray(data) ? data : data.leaderboard || [];
+        const list = Array.isArray(data) ? data : data.leaderboard || data.data || [];
         setBoard(list);
       })
       .catch(() => setError("Could not load the leaderboard."));
@@ -144,11 +144,11 @@ export default function Leaderboard() {
                 <div><strong>Clues Solved:</strong> {selectedTeam.solvedClues?.length || 0}</div>
               </div>
 
-              {selectedTeam.collectedSecretFragments?.length > 0 && (
+              {(selectedTeam.collectedSecretFragments || []).length > 0 && (
                 <div style={{ marginBottom: 12 }}>
                   <h4 style={{ margin: "0 0 6px", fontSize: 13, color: "var(--gold)" }}>🧩 Secret Code Fragments:</h4>
                   <div className="row" style={{ gap: 6 }}>
-                    {selectedTeam.collectedSecretFragments.map((frag, idx) => (
+                    {(selectedTeam.collectedSecretFragments || []).map((frag, idx) => (
                       <span key={idx} className="pill ok mono">{frag}</span>
                     ))}
                   </div>

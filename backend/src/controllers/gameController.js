@@ -70,4 +70,16 @@ const scoreHistory = asyncHandler(async (req, res) => {
   return success(res, { history, rank }, "Score history");
 });
 
-module.exports = { scan, currentClue, answer, hint, scoreHistory };
+const myAssignments = asyncHandler(async (req, res) => {
+  const team = await Team.findById(req.team._id);
+  const assignments = await TeamClueAssignment.find({
+    eventId: team.eventId,
+    teamId: team._id,
+  })
+    .populate("clueId", "clueNumber title checkpointName points isFinal")
+    .sort({ sequenceNumber: 1 });
+
+  return success(res, { assignments }, "My clue assignments");
+});
+
+module.exports = { scan, currentClue, answer, hint, scoreHistory, myAssignments };
