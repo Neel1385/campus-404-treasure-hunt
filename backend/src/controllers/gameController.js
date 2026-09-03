@@ -43,6 +43,7 @@ const currentClue = asyncHandler(async (req, res) => {
       clueNumber: clue.clueNumber,
       currentLevel: team.currentLevel,
       title: clue.title,
+      checkpointName: clue.checkpointName,
       unlocked: team.clueUnlocked,
       locked: team.lockedClue,
     },

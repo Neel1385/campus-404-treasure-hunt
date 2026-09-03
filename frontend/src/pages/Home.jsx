@@ -37,7 +37,9 @@ export default function Home() {
       .then((a) => {
         setEvent(a.event);
       })
-      .catch(() => setError("Could not reach the game server."));
+      .catch(() => {
+        /* suppress banner error on public landing page */
+      });
   }, []);
 
   return (
@@ -59,7 +61,6 @@ export default function Home() {
               <Link to="/login" className="btn secondary">🧭 Start</Link>
             </>
           )}
-          <Link to="/leaderboard" className="btn ghost">💰 Leaderboard</Link>
           {isLoggedIn && (
             <Link to="/scan" className="btn ghost">🗿 Scan QR Code</Link>
           )}

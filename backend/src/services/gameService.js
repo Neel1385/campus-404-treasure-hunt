@@ -227,6 +227,27 @@ async function processQRScan(team, rawQrId, event) {
     return handleWrongScan(team, qrId, qr, null, event, "Dummy QR detected! Nothing useful here.");
   }
 
+  // Handle QR linked directly to a Side Quest
+  if (qr.sideQuestId) {
+    const sideQuest = await SideQuest.findOne({ eventId: event._id, _id: qr.sideQuestId });
+    if (sideQuest && sideQuest.enabled) {
+      await QRScan.create({ eventId: event._id, teamId: team._id, qrId, qrType: qr.type, sideQuestId: sideQuest._id, correct: true });
+      return {
+        success: true,
+        correct: true,
+        sideQuest: {
+          id: sideQuest._id,
+          title: sideQuest.title,
+          description: sideQuest.description,
+          points: sideQuest.points,
+          secretCodeReward: sideQuest.secretCodeReward,
+        },
+        message: `🎯 SIDE QUEST DISCOVERED: "${sideQuest.title}" (+${sideQuest.points} pts)! Answer it on your Dashboard.`,
+        totalPoints: team.points,
+      };
+    }
+  }
+
   const alreadyScanned = await QRScan.findOne({ eventId: event._id, teamId: team._id, qrId, correct: true });
   if (alreadyScanned) {
     if (qr.type === QR_TYPE.NORMAL || qr.type === QR_TYPE.ROAD_PONEGLYPH) {

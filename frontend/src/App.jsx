@@ -8,7 +8,6 @@ import Home from "./pages/Home.jsx";
 import Register from "./pages/Register.jsx";
 import Login from "./pages/Login.jsx";
 import Dashboard from "./pages/Dashboard.jsx";
-import Leaderboard from "./pages/Leaderboard.jsx";
 import AdminLogin from "./pages/AdminLogin.jsx";
 import Admin from "./pages/Admin.jsx";
 import LevelMap from "./pages/GrandLineMap.jsx";
@@ -60,7 +59,6 @@ export default function App() {
             </RequirePlayer>
           }
         />
-        <Route path="/leaderboard" element={<Leaderboard />} />
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin" element={<Admin />} />
         <Route path="/map" element={

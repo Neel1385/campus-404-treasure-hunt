@@ -39,13 +39,11 @@ export default function Sidebar() {
 
   const playerNav = [
     { to: "/scan", icon: "📷", label: "Scan QR Code" },
-    { to: "/leaderboard", icon: "🏆", label: "Leaderboard" },
     { to: "/map", icon: "🗺️", label: "Level Map" },
     { to: "/bounty-history", icon: "📜", label: "Score History" },
   ];
 
   const guestNav = [
-    { to: "/leaderboard", icon: "🏆", label: "Leaderboard" },
     { to: "/how-to-play", icon: "📖", label: "How to Play" },
   ];
 

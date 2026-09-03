@@ -195,7 +195,6 @@ export default function HowToPlay() {
           ) : (
             <Link to="/register" className="btn">🏴‍☠️ REGISTER TEAM</Link>
           )}
-          <Link to="/leaderboard" className="btn secondary">💰 VIEW LEADERBOARD</Link>
           <Link to={team ? "/dashboard" : "/"} className="btn ghost">← BACK TO DASHBOARD</Link>
         </div>
       </div>

@@ -6,6 +6,7 @@ const qrCodeSchema = new mongoose.Schema(
     eventId: { type: mongoose.Schema.Types.ObjectId, ref: "Event", required: true, index: true },
     qrId: { type: String, required: true, uppercase: true, trim: true },
     clueId: { type: mongoose.Schema.Types.ObjectId, ref: "Clue" },
+    sideQuestId: { type: mongoose.Schema.Types.ObjectId, ref: "SideQuest" },
     level: { type: Number, default: 0 },
     type: { type: String, enum: Object.values(QR_TYPE), default: QR_TYPE.NORMAL },
     checkpointName: { type: String, trim: true, default: "" },

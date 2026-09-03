@@ -53,14 +53,14 @@ export default function GrandLineMap() {
 
         {error && <div className="alert error">{error}</div>}
 
-        {totalLevels > 0 && (
+        {totalSteps > 0 && (
           <div className="card" style={{ marginBottom: 24, background: "var(--bg-2)", borderLeft: "4px solid var(--gold)" }}>
             <div className="spread" style={{ marginBottom: 8 }}>
               <span className="muted" style={{ fontFamily: "var(--font-heading)", fontSize: 12, textTransform: "uppercase", letterSpacing: "0.08em" }}>
                 Voyage Progress
               </span>
               <span className="mono" style={{ color: "var(--gold)", fontSize: 14 }}>
-                {completedLevels.length} / {totalLevels} Islands Conquered
+                {completedLevels.length} / {totalSteps} Islands Conquered
               </span>
             </div>
             <div style={{ background: "rgba(13,15,20,0.6)", borderRadius: 999, height: 10, border: "1px solid rgba(212,168,67,0.2)" }}>
@@ -69,7 +69,7 @@ export default function GrandLineMap() {
                   background: "linear-gradient(90deg, #10b981, #f59e0b)",
                   borderRadius: 999,
                   height: "100%",
-                  width: `${totalLevels > 0 ? (completedLevels.length / totalLevels) * 100 : 0}%`,
+                  width: `${totalSteps > 0 ? (completedLevels.length / totalSteps) * 100 : 0}%`,
                   transition: "width 0.5s ease",
                 }}
               />

@@ -289,9 +289,6 @@ export default function Dashboard() {
             <p style={{ margin: "8px 0 0", fontSize: 15, color: "var(--text)" }}>
               The hunt timer has expired and the event has officially concluded. Game submissions and scans are now locked.
             </p>
-            <div style={{ marginTop: 16 }}>
-              <Link to="/leaderboard" className="btn danger">🏆 View Final Standings</Link>
-            </div>
           </div>
         )}
 
@@ -385,31 +382,27 @@ export default function Dashboard() {
             <p className="muted">
               Final Points: <strong className="mono">{teamData.finalScore}</strong>
             </p>
-            <Link to="/leaderboard" className="btn">
-              View Leaderboard
-            </Link>
           </div>
-        ) : clue && clue.clue ? (
+        ) : clue && (clue.clue || clue.title || clue.checkpointName) ? (
           <div className="card">
             <div className="spread">
-              <span className="pill info">Level {clue.currentLevel || clue.clueNumber} · Clue {clue.clueNumber} of {totalLevels}</span>
+              <span className="pill info">Level {clue.currentLevel || clue.clueNumber} of {totalLevels}</span>
               {unlocked ? (
                 <span className="pill ok">Deciphered — answer it</span>
               ) : clue.locked ? (
                 <span className="pill danger">🔒 Sealed</span>
               ) : (
-                <span className="pill warn">Scan the QR Code to unlock</span>
+                <span className="pill warn">Scan QR Code to unlock</span>
               )}
             </div>
-            <h2 style={{ marginBottom: 4 }}>{clue.clue.title}</h2>
+            <h2 style={{ marginBottom: 4 }}>{clue.clue?.title || clue.title || "Current Destination"}</h2>
             <p className="muted" style={{ marginTop: 0 }}>
-              <span className="mono">{clue.clue.checkpointName}</span> · {clue.clue.points} points ·{" "}
-              {clue.clue.difficulty}
+              📍 Station Checkpoint: <strong className="mono" style={{ color: "var(--gold)" }}>{clue.clue?.checkpointName || clue.checkpointName || "On Campus"}</strong>
             </p>
-            <p>{clue.clue.description}</p>
 
-            {unlocked ? (
+            {unlocked && clue.clue ? (
               <>
+                <p>{clue.clue.description}</p>
                 <form className="row" onSubmit={submitAnswer} style={{ marginTop: 8 }}>
                   <input
                     style={{ flex: 1, minWidth: 200 }}
@@ -440,9 +433,14 @@ export default function Dashboard() {
                 )}
               </>
             ) : (
-              <p className="muted">
-                Find the QR Code posted at <strong>{clue.clue.checkpointName}</strong> and scan it to unlock this clue.
-              </p>
+              <div style={{ background: "var(--bg-2)", padding: 16, borderRadius: 8, marginTop: 12 }}>
+                <p style={{ margin: "0 0 12px", fontSize: 15, lineHeight: 1.5 }}>
+                  <strong>🧭 LOG POSE DESTINATION:</strong> Navigate to <strong style={{ color: "var(--gold)" }}>{clue.clue?.checkpointName || clue.checkpointName || "the assigned checkpoint"}</strong> on campus and scan the physical QR code posted there to unlock this clue's riddle!
+                </p>
+                <Link to="/scan" className="btn ok small">
+                  📷 Scan QR Code at Checkpoint
+                </Link>
+              </div>
             )}
           </div>
         ) : (
