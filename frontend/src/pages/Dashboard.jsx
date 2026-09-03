@@ -3,6 +3,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
 import { useEvent } from "../EventContext.jsx";
+import { cacheTeamSession, getCachedTeamSession, getPendingOperations, removePendingOperation } from "../offlineStorage.js";
 
 function fmtMs(ms) {
   if (ms == null || ms <= 0) return "—";
@@ -105,19 +106,64 @@ export default function Dashboard() {
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
 
+  const syncPending = useCallback(async () => {
+    if (!currentEvent?._id || !token || !navigator.onLine) return;
+    try {
+      const ops = await getPendingOperations(currentEvent._id);
+      if (ops && ops.length > 0) {
+        const syncRes = await api.post(`/events/${currentEvent._id}/sync`, { operations: ops }, { token });
+        if (syncRes && syncRes.length > 0) {
+          for (const item of syncRes) {
+            await removePendingOperation(item.operationId);
+          }
+        }
+      }
+    } catch {
+      /* ignore sync errors */
+    }
+  }, [currentEvent?._id, token]);
+
   const load = useCallback(async () => {
     const eventIdParam = currentEvent?._id ? `?eventId=${currentEvent._id}` : "";
-    const [meData, clueData, histData, questsData] = await Promise.all([
-      api.get(`/teams/me${eventIdParam}`, { token }),
-      api.get(`/game/current-clue${eventIdParam}`, { token }),
-      api.get(`/game/score-history${eventIdParam}`, { token }),
-      currentEvent?._id ? api.get(`/events/${currentEvent._id}/side-quests`, { token }).catch(() => []) : Promise.resolve([]),
-    ]);
-    setMe(meData);
-    setClue(clueData);
-    setHistory(histData.history || []);
-    setSideQuests(Array.isArray(questsData) ? questsData : []);
-  }, [token, currentEvent]);
+    try {
+      await syncPending();
+
+      const [meData, clueData, histData, questsData, assignData] = await Promise.all([
+        api.get(`/teams/me${eventIdParam}`, { token }),
+        api.get(`/game/current-clue${eventIdParam}`, { token }),
+        api.get(`/game/score-history${eventIdParam}`, { token }),
+        currentEvent?._id ? api.get(`/events/${currentEvent._id}/side-quests`, { token }).catch(() => []) : Promise.resolve([]),
+        api.get(`/game/my-assignments${eventIdParam}`, { token }).catch(() => ({ assignments: [] })),
+      ]);
+
+      setMe(meData);
+      setClue(clueData);
+      setHistory(histData.history || []);
+      setSideQuests(Array.isArray(questsData) ? questsData : []);
+
+      if (currentEvent?._id) {
+        await cacheTeamSession(currentEvent._id, {
+          meData,
+          clueData,
+          histData,
+          questsData: Array.isArray(questsData) ? questsData : [],
+          assignments: assignData.assignments || [],
+        });
+      }
+    } catch (err) {
+      if (!navigator.onLine && currentEvent?._id) {
+        const cached = await getCachedTeamSession(currentEvent._id);
+        if (cached) {
+          setMe(cached.meData);
+          setClue(cached.clueData);
+          setHistory(cached.histData?.history || []);
+          setSideQuests(cached.questsData || []);
+          return;
+        }
+      }
+      throw err;
+    }
+  }, [token, currentEvent, syncPending]);
 
   useEffect(() => {
     load().catch((err) => {
@@ -264,10 +310,22 @@ export default function Dashboard() {
               <div className="lbl">🌊 Current Level</div>
             </div>
             <div className="stat">
-              <div className="num">
-                {isComplete ? "✓" : `${teamData?.solvedClues?.length ?? 0} / ${totalLevels}`}
+              <div className="num" style={{ color: "var(--ok)" }}>
+                {me?.completedCluesCount ?? teamData?.solvedClues?.length ?? 0}
               </div>
-              <div className="lbl">🗿 Clues Completed</div>
+              <div className="lbl">✅ Clues Completed</div>
+            </div>
+            <div className="stat">
+              <div className="num" style={{ color: "var(--warn)" }}>
+                {me?.remainingCluesCount ?? Math.max(0, (me?.totalAssignedClues || totalLevels || 0) - (teamData?.solvedClues?.length || 0))}
+              </div>
+              <div className="lbl">⏳ Clues Remaining</div>
+            </div>
+            <div className="stat">
+              <div className="num">
+                {me?.totalAssignedClues ?? totalLevels ?? 0}
+              </div>
+              <div className="lbl">🎯 Total Assigned Clues</div>
             </div>
             <div className="stat">
               <div className="num">#{rank}</div>

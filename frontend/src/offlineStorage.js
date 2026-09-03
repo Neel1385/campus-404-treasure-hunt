@@ -13,6 +13,9 @@ export function openOfflineDB() {
       if (!db.objectStoreNames.contains("eventSnapshots")) {
         db.createObjectStore("eventSnapshots", { keyPath: "eventId" });
       }
+      if (!db.objectStoreNames.contains("teamSessions")) {
+        db.createObjectStore("teamSessions", { keyPath: "eventId" });
+      }
     };
     request.onsuccess = (e) => resolve(e.target.result);
     request.onerror = (e) => reject(e.target.error);
@@ -31,6 +34,35 @@ export async function queueOfflineOperation(operation) {
     };
     const req = store.put(op);
     req.onsuccess = () => resolve(op);
+    req.onerror = (e) => reject(e.target.error);
+  });
+}
+
+export async function cacheTeamSession(eventId, sessionData) {
+  if (!eventId) return;
+  const db = await openOfflineDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("teamSessions", "readwrite");
+    const store = tx.objectStore("teamSessions");
+    const record = {
+      eventId,
+      sessionData,
+      cachedAt: new Date().toISOString(),
+    };
+    const req = store.put(record);
+    req.onsuccess = () => resolve(record);
+    req.onerror = (e) => reject(e.target.error);
+  });
+}
+
+export async function getCachedTeamSession(eventId) {
+  if (!eventId) return null;
+  const db = await openOfflineDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("teamSessions", "readonly");
+    const store = tx.objectStore("teamSessions");
+    const req = store.get(eventId);
+    req.onsuccess = () => resolve(req.result ? req.result.sessionData : null);
     req.onerror = (e) => reject(e.target.error);
   });
 }

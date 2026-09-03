@@ -119,8 +119,23 @@ async function registerAndLogin(suffix, targetEvent = activeEvent) {
     ],
   });
 
+  // Assign clues to the newly registered team so auth login succeeds
+  const createdTeam = await Team.findOne({ eventId: targetEvent._id, teamName });
+  if (createdTeam) {
+    const clues = await Clue.find({ eventId: targetEvent._id }).sort({ clueNumber: 1 });
+    for (let i = 0; i < clues.length; i++) {
+      await TeamClueAssignment.create({
+        eventId: targetEvent._id,
+        teamId: createdTeam._id,
+        clueId: clues[i]._id,
+        sequenceNumber: i + 1,
+        isFinal: clues[i].isFinal || false,
+      });
+    }
+  }
+
   const res = await request(app).post("/api/auth/login").send({ identifier: teamName, password });
-  return { token: res.body.data.token, team: res.body.data.team, raw: resReg.body };
+  return { token: res.body.data?.token, team: res.body.data?.team, raw: resReg.body };
 }
 
 const auth = (token) => ({ Authorization: `Bearer ${token}` });

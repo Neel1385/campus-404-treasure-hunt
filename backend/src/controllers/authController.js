@@ -128,6 +128,17 @@ const login = asyncHandler(async (req, res) => {
     throw new ApiError("Your team has been disabled. Contact an organizer.", 403, "TEAM_DISABLED");
   }
 
+  // Check if clues have been assigned to the team before allowing login
+  const { TeamClueAssignment } = require("../models");
+  const assignedCount = await TeamClueAssignment.countDocuments({
+    eventId: team.eventId,
+    teamId: team._id,
+  });
+
+  if (assignedCount === 0) {
+    throw new ApiError("No clues have been assigned to your team yet. Please wait for the organizer.", 403, "NO_CLUES_ASSIGNED");
+  }
+
   if (!team.startTime) {
     team.startTime = new Date();
     await team.save();
