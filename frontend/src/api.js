@@ -5,6 +5,7 @@ const API_BASE = (import.meta.env.VITE_API_URL || "/api").replace(/\/$/, "");
 
 export const PLAYER_KEY = "campus404:player";
 export const ADMIN_KEY = "campus404:admin";
+export const EVENT_KEY = "campus404:current_event";
 
 export function readPlayer() {
   try {
@@ -38,11 +39,27 @@ export function clearAdmin() {
   localStorage.removeItem(ADMIN_KEY);
 }
 
+export function readCurrentEventId() {
+  try {
+    const ev = JSON.parse(localStorage.getItem(EVENT_KEY) || "null");
+    return ev ? ev._id : null;
+  } catch {
+    return null;
+  }
+}
+
 async function http(path, { method = "GET", body, token } = {}) {
   const headers = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const res = await fetch(`${API_BASE}${path}`, {
+  const currentEventId = readCurrentEventId();
+  let fullPath = path;
+  if (currentEventId && !path.includes("eventId=")) {
+    const separator = path.includes("?") ? "&" : "?";
+    fullPath = `${path}${separator}eventId=${currentEventId}`;
+  }
+
+  const res = await fetch(`${API_BASE}${fullPath}`, {
     method,
     headers,
     body: body === undefined ? undefined : JSON.stringify(body),
@@ -55,9 +72,14 @@ async function http(path, { method = "GET", body, token } = {}) {
     /* non-JSON response */
   }
 
-  if (!json.success) {
-    const err = new Error(json.message || `Request failed (${res.status})`);
-    err.code = json.code || "SERVER_ERROR";
+  if (!res.ok || !json.success) {
+    const defaultMsg = res.status === 404
+      ? "Resource not found on server."
+      : res.status >= 500
+      ? "Server encountered an error. Please try again."
+      : `Request failed (${res.status})`;
+    const err = new Error(json.message || defaultMsg);
+    err.code = json.code || (res.status === 404 ? "NOT_FOUND" : "SERVER_ERROR");
     err.status = res.status;
     throw err;
   }

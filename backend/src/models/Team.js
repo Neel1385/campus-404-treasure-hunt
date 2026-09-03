@@ -22,24 +22,35 @@ const solvedClueSchema = new mongoose.Schema(
 
 const teamSchema = new mongoose.Schema(
   {
-    teamId: { type: String, required: true, unique: true, trim: true, uppercase: true },
-    teamName: { type: String, required: true, unique: true, trim: true },
+    eventId: { type: mongoose.Schema.Types.ObjectId, ref: "Event", required: true, index: true },
+    teamId: { type: String, required: true, trim: true, uppercase: true },
+    teamName: { type: String, required: true, trim: true },
     members: {
       type: [memberSchema],
       validate: [(v) => v.length >= 3 && v.length <= 4, "A team must have 3 to 4 members"],
     },
     passwordHash: { type: String, required: true, select: false },
+    plainPassword: { type: String, default: "" },
     role: { type: String, enum: ["player", "admin"], default: "player" },
-    email: { type: String, trim: true, lowercase: true, default: "" }, // used by admin accounts
+    email: { type: String, trim: true, lowercase: true, default: "" },
     points: { type: Number, default: 0 },
     currentClue: { type: Number, default: 1 },
-    currentLevel: { type: Number, default: 1 }, // mirrors currentClue; used for level-based QR validation
-    completedLevels: { type: [Number], default: [] }, // [1,2,3] means levels 1-3 are done
-    levelStartedAt: { type: Date }, // timestamp when current level was unlocked (for speed bonus)
-    clueUnlocked: { type: Boolean, default: false }, // scanned the current clue's QR?
+    currentLevel: { type: Number, default: 1 },
+    completedLevels: { type: [Number], default: [] },
+    completedSideQuests: { type: [mongoose.Schema.Types.ObjectId], default: [] },
+    collectedSecretFragments: { type: [String], default: [] },
+    levelStartedAt: { type: Date },
+    clueUnlocked: { type: Boolean, default: false },
     solvedClues: { type: [solvedClueSchema], default: [] },
     wrongScans: { type: Number, default: 0 },
-    lockedClue: { type: Boolean, default: false }, // attempt limit reached
+    lockedClue: { type: Boolean, default: false },
+
+    // Team Blocking Engine Fields
+    blocked: { type: Boolean, default: false },
+    blockedUntil: { type: Date },
+    remainingBlockedScans: { type: Number, default: 0 },
+    blockReason: { type: String, default: "" },
+
     hintsUsed: {
       type: [
         {
@@ -51,16 +62,18 @@ const teamSchema = new mongoose.Schema(
       ],
       default: [],
     },
-    bonusClaimed: { type: [String], default: [] }, // QR ids already processed for bonus/trap/hint QRs
+    bonusClaimed: { type: [String], default: [] },
     status: { type: String, enum: Object.values(TEAM_STATUS), default: TEAM_STATUS.ACTIVE },
     startTime: { type: Date },
-    endTime: { type: Date }, // completion time
+    endTime: { type: Date },
     finalScore: { type: Number },
   },
   { timestamps: true }
 );
 
-// Hash password before saving.
+teamSchema.index({ eventId: 1, teamId: 1 }, { unique: true });
+teamSchema.index({ eventId: 1, teamName: 1 }, { unique: true });
+
 teamSchema.pre("save", async function (next) {
   if (!this.isModified("passwordHash")) return next();
   const salt = await bcrypt.genSalt(10);
@@ -75,6 +88,7 @@ teamSchema.methods.comparePassword = function (plain) {
 teamSchema.methods.toSafeJSON = function () {
   return {
     id: this._id,
+    eventId: this.eventId,
     teamId: this.teamId,
     teamName: this.teamName,
     role: this.role,
@@ -82,11 +96,18 @@ teamSchema.methods.toSafeJSON = function () {
     currentClue: this.currentClue,
     currentLevel: this.currentLevel,
     completedLevels: this.completedLevels,
+    completedSideQuests: this.completedSideQuests,
+    collectedSecretFragments: this.collectedSecretFragments,
     clueUnlocked: this.clueUnlocked,
     solvedClues: this.solvedClues,
     wrongScans: this.wrongScans,
     lockedClue: this.lockedClue,
+    blocked: this.blocked,
+    blockedUntil: this.blockedUntil,
+    remainingBlockedScans: this.remainingBlockedScans,
+    blockReason: this.blockReason,
     hintsUsed: this.hintsUsed,
+    plainPassword: this.plainPassword,
     status: this.status,
     startTime: this.startTime,
     endTime: this.endTime,

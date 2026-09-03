@@ -1,5 +1,8 @@
+import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth.jsx";
+import { useEvent } from "../EventContext.jsx";
+import { api } from "../api.js";
 
 const STEPS = [
   { icon: "🏴‍☠️", title: "REGISTER", desc: "Create your team and pick a name" },
@@ -30,6 +33,22 @@ const TIPS = [
 
 export default function HowToPlay() {
   const { team } = useAuth();
+  const { currentEvent } = useEvent();
+  const [adminRules, setAdminRules] = useState("");
+
+  useEffect(() => {
+    if (currentEvent?.rulesAndRegulations) {
+      setAdminRules(currentEvent.rulesAndRegulations);
+    } else {
+      api.get("/event/status")
+        .then((res) => {
+          if (res.event?.rulesAndRegulations) {
+            setAdminRules(res.event.rulesAndRegulations);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [currentEvent]);
 
   return (
     <div>
@@ -101,8 +120,27 @@ export default function HowToPlay() {
         {/* Rules */}
         <div className="card" style={{ marginBottom: 24 }}>
           <h2 style={{ fontFamily: "var(--font-heading)", color: "var(--gold)", marginTop: 0 }}>
-            ⚖️ Rules
+            ⚖️ Event Rules & Guidelines
           </h2>
+          {adminRules && (
+            <div
+              style={{
+                padding: "16px 18px",
+                background: "var(--bg-2)",
+                borderRadius: 8,
+                borderLeft: "4px solid var(--gold)",
+                marginBottom: 16,
+                fontSize: 14,
+                whiteSpace: "pre-wrap",
+                lineHeight: 1.6,
+                color: "var(--text)",
+              }}
+            >
+              <strong>Official Organizer Directives:</strong>
+              <div style={{ marginTop: 8 }}>{adminRules}</div>
+            </div>
+          )}
+
           <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
             {RULES.map((rule, i) => (
               <div
@@ -157,7 +195,6 @@ export default function HowToPlay() {
           ) : (
             <Link to="/register" className="btn">🏴‍☠️ REGISTER TEAM</Link>
           )}
-          <Link to="/leaderboard" className="btn secondary">💰 VIEW LEADERBOARD</Link>
           <Link to={team ? "/dashboard" : "/"} className="btn ghost">← BACK TO DASHBOARD</Link>
         </div>
       </div>

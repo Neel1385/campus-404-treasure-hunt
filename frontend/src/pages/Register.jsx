@@ -1,11 +1,14 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api.js";
+import { useEvent } from "../EventContext.jsx";
 
 const EMPTY_MEMBER = { fullName: "", collegeId: "" };
 
 export default function Register() {
   const navigate = useNavigate();
+  const { currentEvent, eventsList } = useEvent();
+  const [selectedEventId, setSelectedEventId] = useState("");
   const [form, setForm] = useState({
     teamName: "",
     leaderName: "",
@@ -17,6 +20,14 @@ export default function Register() {
   });
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    if (currentEvent && currentEvent._id) {
+      setSelectedEventId(currentEvent._id);
+    } else if (eventsList.length > 0) {
+      setSelectedEventId(eventsList[0]._id);
+    }
+  }, [currentEvent, eventsList]);
 
   const set = (key) => (e) => setForm({ ...form, [key]: e.target.value });
 
@@ -45,6 +56,7 @@ export default function Register() {
     try {
       if (form.password !== form.confirmPassword) throw new Error("Passwords do not match.");
       const data = await api.post("/auth/register", {
+        eventId: selectedEventId,
         teamName: form.teamName,
         leaderName: form.leaderName,
         leaderCollegeId: form.leaderCollegeId,
@@ -65,7 +77,7 @@ export default function Register() {
   return (
     <div className="container narrow">
       <p className="brand" style={{ marginTop: 24 }}>
-        <Link to="/" style={{ color: "inherit" }}>🏴‍☠️ THE LOST TREASURE</Link>
+        <Link to="/" style={{ color: "inherit" }}>🏴‍☠️ CAMPUS 404</Link>
       </p>
 
       <div className="hero" style={{ padding: "24px 0 16px" }}>
@@ -81,6 +93,24 @@ export default function Register() {
       {error && <div className="alert error">⚓ {error}</div>}
 
       <form className="card" onSubmit={submit}>
+        {eventsList.length > 0 && (
+          <div className="field">
+            <label>⚓ Select Event</label>
+            <select
+              value={selectedEventId}
+              onChange={(e) => setSelectedEventId(e.target.value)}
+              style={{ width: "100%", padding: 10, borderRadius: 6 }}
+              required
+            >
+              {eventsList.map((e) => (
+                <option key={e._id} value={e._id}>
+                  {e.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         <div className="field">
           <label>🏴‍☠️ Team Name</label>
           <input value={form.teamName} onChange={set("teamName")} required minLength={2} placeholder="e.g. Straw Hats" />

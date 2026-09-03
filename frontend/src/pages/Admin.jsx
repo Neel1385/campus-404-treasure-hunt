@@ -2,13 +2,46 @@ import { useEffect, useState, useCallback } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { api, readAdmin, clearAdmin } from "../api.js";
 
-const STATUS_LABEL = { NOT_STARTED: "Not started", ACTIVE: "Live", PAUSED: "Paused", ENDED: "Ended" };
+const STATUS_LABEL = {
+  DRAFT: "Draft",
+  READY: "Ready",
+  NOT_STARTED: "Not started",
+  RUNNING: "Live",
+  ACTIVE: "Live",
+  PAUSED: "Paused",
+  ENDED: "Ended",
+  ARCHIVED: "Archived",
+};
 
 export default function Admin() {
   const [admin] = useState(() => readAdmin());
   const [tab, setTab] = useState("overview");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [selectedEventId, setSelectedEventId] = useState(() => localStorage.getItem("campus404_admin_event_id") || "");
+  const [eventsList, setEventsList] = useState([]);
+
+  useEffect(() => {
+    if (selectedEventId) {
+      localStorage.setItem("campus404_admin_event_id", selectedEventId);
+    }
+  }, [selectedEventId]);
+
+  useEffect(() => {
+    if (!admin?.token) return;
+    api.get("/events", { token: admin.token })
+      .then((data) => {
+        const list = data || [];
+        setEventsList(list);
+        if (list.length > 0 && !selectedEventId) {
+          const defaultId = list[0]._id;
+          setSelectedEventId(defaultId);
+          localStorage.setItem("campus404_admin_event_id", defaultId);
+        }
+      })
+      .catch(() => {});
+  }, [admin?.token]);
 
   if (!admin?.token) return <Navigate to="/admin/login" replace />;
 
@@ -30,170 +63,348 @@ export default function Admin() {
     window.setTimeout(() => setNotice(""), 4000);
   };
 
+  const navItems = [
+    ["overview", "⚓ Overview & Events"],
+    ["teams", "🏴‍☠️ Teams Control"],
+    ["assignments", "🔀 Assigned Clues"],
+    ["clues", "📜 Clues & Pool"],
+    ["qrs", "🗺️ QR Codes"],
+    ["sidequests", "🎯 Side Quests"],
+    ["audit", "📋 Activity Log"],
+  ];
+
   return (
-    <div>
-      <div className="topbar">
-        <span className="brand">
-          <Link to="/" style={{ color: "inherit" }}>
-            🏴‍☠️ THE LOST TREASURE
-          </Link>{" "}
-          <span className="muted" style={{ fontWeight: 400, fontFamily: "var(--font-heading)" }}>
-            / Admin Panel
-          </span>
-        </span>
-        <div className="links">
-          <span className="muted">{admin.admin?.name}</span>
+    <div style={{ display: "flex", minHeight: "100vh", background: "var(--bg-1, #0f172a)", color: "var(--text, #f8fafc)" }}>
+      {/* Admin Sidebar Navigation Panel */}
+      <aside
+        style={{
+          width: sidebarOpen ? "260px" : "70px",
+          transition: "width 0.2s ease",
+          background: "var(--bg-2, #1e293b)",
+          borderRight: "1px solid var(--border, #334155)",
+          display: "flex",
+          flexDirection: "column",
+          padding: "16px 12px",
+          position: "sticky",
+          top: 0,
+          height: "100vh",
+          boxSizing: "border-box",
+          zIndex: 100,
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
+          {sidebarOpen ? (
+            <Link to="/" style={{ textDecoration: "none", color: "var(--gold, #f59e0b)", fontWeight: 700, fontSize: 16 }}>
+              🏴‍☠️ CAMPUS 404
+            </Link>
+          ) : (
+            <span style={{ fontSize: 20 }}>🏴‍☠️</span>
+          )}
           <button
             className="btn small ghost"
+            onClick={() => setSidebarOpen(!sidebarOpen)}
+            style={{ padding: "4px 8px", cursor: "pointer" }}
+            title="Toggle Sidebar"
+          >
+            {sidebarOpen ? "◀" : "▶"}
+          </button>
+        </div>
+
+        {sidebarOpen && (
+          <div style={{ fontSize: 12, color: "var(--muted, #94a3b8)", marginBottom: 16, paddingLeft: 4 }}>
+            ADMIN CONTROL PANEL
+          </div>
+        )}
+
+        <nav style={{ display: "flex", flexDirection: "column", gap: 6, flex: 1 }}>
+          {navItems.map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: 12,
+                padding: "10px 12px",
+                borderRadius: 6,
+                border: "none",
+                background: tab === key ? "var(--event-primary, #10b981)" : "transparent",
+                color: tab === key ? "#fff" : "var(--text, #f8fafc)",
+                fontWeight: tab === key ? 600 : 400,
+                textAlign: "left",
+                cursor: "pointer",
+                fontSize: 14,
+                whiteSpace: "nowrap",
+                overflow: "hidden",
+              }}
+            >
+              {sidebarOpen ? label : label.split(" ")[0]}
+            </button>
+          ))}
+        </nav>
+
+        <div style={{ borderTop: "1px solid var(--border, #334155)", paddingTop: 12, marginTop: 12 }}>
+          {sidebarOpen && (
+            <div style={{ fontSize: 13, color: "var(--muted, #94a3b8)", marginBottom: 8 }}>
+              Logged in: <b>{admin.admin?.name || "Admin"}</b>
+            </div>
+          )}
+          <button
+            className="btn small danger"
+            style={{ width: "100%", textAlign: "center" }}
             onClick={() => {
               clearAdmin();
               window.location.href = "/admin/login";
             }}
           >
-            Logout
+            {sidebarOpen ? "Logout" : "🚪"}
           </button>
         </div>
-      </div>
+      </aside>
 
-      <div className="container" style={{ maxWidth: 1000 }}>
-        {error && <div className="alert error">{error}</div>}
-        {notice && <div className="alert success">{notice}</div>}
-
-        <div className="tabs">
-          {[
-            ["overview", "⚓ Overview"],
-            ["teams", "🏴‍☠️ Teams"],
-            ["clues", "📜 Clues"],
-            ["qrs", "🗺️ QR Codes"],
-            ["audit", "📋 Activity Log"],
-          ].map(([key, label]) => (
-            <button key={key} className={`tab ${tab === key ? "active" : ""}`} onClick={() => setTab(key)}>
-              {label}
-            </button>
-          ))}
+      {/* Main Admin Content Area */}
+      <main style={{ flex: 1, padding: "32px 40px", overflowY: "auto" }}>
+        {/* Persistent Global Event Bar */}
+        <div className="card" style={{ marginBottom: 28, padding: "20px 24px", background: "var(--bg-2, #1e293b)", borderLeft: "4px solid var(--gold, #f59e0b)" }}>
+          <div className="spread">
+            <div className="row" style={{ gap: 12 }}>
+              <span style={{ fontSize: 18, fontWeight: 700, color: "var(--gold, #f59e0b)" }}>🎯 Active Event Context:</span>
+              <select
+                value={selectedEventId}
+                onChange={(e) => setSelectedEventId(e.target.value)}
+                style={{ minWidth: 260, padding: "6px 10px", borderRadius: 6, fontSize: 14, fontWeight: 600 }}
+              >
+                <option value="">-- Select Active Event --</option>
+                {eventsList.map((e) => (
+                  <option key={e._id} value={e._id}>
+                    {e.name} ({STATUS_LABEL[e.status] || e.status})
+                  </option>
+                ))}
+              </select>
+            </div>
+            {selectedEventId && (
+              <span className="pill info" style={{ fontSize: 12 }}>
+                ID: {selectedEventId}
+              </span>
+            )}
+          </div>
         </div>
 
-        {tab === "overview" && <Overview token={token} run={run} flash={flash} />}
-        {tab === "teams" && <Teams token={token} run={run} flash={flash} />}
-        {tab === "clues" && <Clues token={token} run={run} flash={flash} />}
-        {tab === "qrs" && <QRCodes token={token} run={run} flash={flash} />}
-        {tab === "audit" && <Audit token={token} run={run} />}
-      </div>
+        {error && <div className="alert error" style={{ marginBottom: 16 }}>{error}</div>}
+        {notice && <div className="alert success" style={{ marginBottom: 16 }}>{notice}</div>}
+
+        {tab === "overview" && (
+          <Overview
+            token={token}
+            run={run}
+            flash={flash}
+            selectedEventId={selectedEventId}
+            setSelectedEventId={setSelectedEventId}
+          />
+        )}
+        {tab === "teams" && <Teams token={token} run={run} flash={flash} eventId={selectedEventId} />}
+        {tab === "assignments" && <Assignments token={token} run={run} eventId={selectedEventId} />}
+        {tab === "clues" && <Clues token={token} run={run} flash={flash} eventId={selectedEventId} />}
+        {tab === "qrs" && <QRCodes token={token} run={run} flash={flash} eventId={selectedEventId} />}
+        {tab === "sidequests" && <SideQuests token={token} run={run} flash={flash} eventId={selectedEventId} />}
+        {tab === "audit" && <Audit token={token} run={run} eventId={selectedEventId} />}
+      </main>
     </div>
   );
 }
 
 /* ------------------------------------------------------------------ */
 
-function Overview({ token, run, flash }) {
+function Overview({ token, run, flash, selectedEventId, setSelectedEventId }) {
+  const [events, setEvents] = useState([]);
   const [stats, setStats] = useState(null);
   const [event, setEvent] = useState(null);
   const [settingsDraft, setSettingsDraft] = useState(null);
 
-  const load = useCallback(async () => {
-    const data = await run(() => api.get("/admin/statistics", { token }));
-    setStats(data.stats);
-    setEvent(data.event);
-    setSettingsDraft(null);
-  }, [token]);
+  const loadEvents = useCallback(async () => {
+    const data = await run(() => api.get("/events", { token }));
+    const list = data || [];
+    setEvents(list);
+    if (list.length > 0 && !selectedEventId) {
+      setSelectedEventId(list[0]._id);
+    }
+  }, [token, selectedEventId, setSelectedEventId]);
 
   useEffect(() => {
-    load().catch(() => {});
-  }, [load]);
+    loadEvents().catch(() => {});
+  }, [loadEvents]);
+
+  const loadEventDetails = useCallback(async () => {
+    if (!selectedEventId) return;
+    const [statData, eventData] = await Promise.all([
+      run(() => api.get(`/admin/statistics?eventId=${selectedEventId}`, { token })),
+      run(() => api.get(`/events/${selectedEventId}`, { token })),
+    ]);
+    setStats(statData.stats);
+    setEvent(eventData);
+    setSettingsDraft(null);
+  }, [token, selectedEventId]);
+
+  useEffect(() => {
+    loadEventDetails().catch(() => {});
+  }, [loadEventDetails]);
+
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [delTeams, setDelTeams] = useState(true);
+  const [delClues, setDelClues] = useState(true);
+  const [delQRs, setDelQRs] = useState(true);
+  const [delLogs, setDelLogs] = useState(true);
+  const [delQuests, setDelQuests] = useState(true);
 
   const setStatus = async (status) => {
-    await run(() => api.put("/admin/event/status", { status }, { token }));
-    flash(`Event ${STATUS_LABEL[status] || status}`);
-    load().catch(() => {});
+    if (!selectedEventId) return;
+    await run(() => api.post(`/events/${selectedEventId}/status`, { status }, { token }));
+    flash(`Event status set to ${STATUS_LABEL[status] || status}`);
+    loadEventDetails().catch(() => {});
   };
 
-  const resetEvent = async () => {
-    if (!window.confirm("Reset ALL team progress, scores, scans and logs? This cannot be undone.")) return;
-    await run(() => api.post("/admin/event/reset", {}, { token }));
-    flash("Event reset — all teams reset to Level 1");
-    load().catch(() => {});
+  const handleDeleteEvent = async () => {
+    if (!selectedEventId) return;
+    if (!window.confirm("Are you sure you want to permanently delete this event?")) return;
+    await run(() => api.del(`/admin/events/${selectedEventId}`, {
+      token,
+      body: {
+        deleteTeams: delTeams,
+        deleteClues: delClues,
+        deleteQRs: delQRs,
+        deleteLogs: delLogs,
+        deleteSideQuests: delQuests,
+      },
+    }));
+    flash("Event permanently deleted.");
+    setShowDeleteModal(false);
+    setSelectedEventId("");
+    localStorage.removeItem("campus404_admin_event_id");
+    loadEvents().catch(() => {});
+  };
+
+  const createNewEvent = async () => {
+    const name = window.prompt("Enter new Event name:");
+    if (!name) return;
+    const res = await run(() => api.post("/events", { name, status: "DRAFT" }, { token }));
+    flash(`Event "${res.name}" created!`);
+    loadEvents().catch(() => {});
+  };
+
+  const [cluesPerTeamInput, setCluesPerTeamInput] = useState(5);
+
+  const generateAssignments = async () => {
+    if (!selectedEventId) return;
+    await run(() => api.put(`/events/${selectedEventId}`, {
+      settings: { ...event?.settings, cluesPerTeam: Number(cluesPerTeamInput) }
+    }, { token }));
+    const res = await run(() => api.post(`/events/${selectedEventId}/generate-assignments`, {}, { token }));
+    flash(`Generated ${cluesPerTeamInput} clue assignments for ${res.teamsProcessed || 0} team(s)!`);
   };
 
   const saveSettings = async (e) => {
     e.preventDefault();
-    const patch = { ...settingsDraft };
-    for (const k of ["duration", "maxTeamSize", "maxAttemptsPerClue", "wrongScanPenalty", "maxWrongScans",
-      "wrongAnswerPenalty", "hint1Penalty", "hint2Penalty", "pointsPerScan",
-      "correctQRPoints", "clueCompletionPoints", "speedBonusMax",
-      "speedBonusT1", "speedBonusP1", "speedBonusT2", "speedBonusP2",
-      "speedBonusT3", "speedBonusP3", "finalChallengePoints"]) {
-      if (patch[k] !== undefined) patch[k] = Number(patch[k]);
-    }
-    await run(() => api.put("/admin/event/settings", patch, { token }));
-    flash("Event settings saved.");
-    load().catch(() => {});
+    if (!selectedEventId) return;
+    await run(() => api.put(`/events/${selectedEventId}`, settingsDraft, { token }));
+    flash("Event configuration saved.");
+    loadEventDetails().catch(() => {});
   };
 
-  const T = ({ label, state, set, type = "text" }) => (
-    <div className="field" style={{ gridColumn: "span 1" }}>
-      <label>{label}</label>
-      <input type={type} value={state ?? ""} onChange={(e) => set(e.target.value)} />
-    </div>
-  );
-  const B = ({ label, state, set }) => (
-    <label className="row" style={{ marginBottom: 10 }}>
-      <input type="checkbox" checked={!!state} onChange={(e) => set(e.target.checked)} />
-      <span>{label}</span>
-    </label>
-  );
-
-  const effectiveStatus = event?.effectiveStatus || event?.status || "NOT_STARTED";
+  const effectiveStatus = event?.effectiveStatus || event?.status || "DRAFT";
 
   return (
     <>
-      <div className="card">
+      <div className="card" style={{ marginBottom: 20 }}>
         <div className="spread">
-          <h3 style={{ margin: 0, fontFamily: "var(--font-heading)", color: "var(--gold)" }}>
-            ⚓ Event Control
-          </h3>
-          <span className={`pill ${effectiveStatus === "ACTIVE" ? "ok" : effectiveStatus === "ENDED" ? "danger" : "warn"}`}>
-            {STATUS_LABEL[effectiveStatus] || "—"}
-          </span>
+          <div>
+            <h3 style={{ margin: 0, color: "var(--gold)" }}>⚓ Event Selector & Lifecycle</h3>
+            <p className="muted" style={{ fontSize: 13, marginTop: 4 }}>
+              Manage multiple independent campus hunt events from a single admin panel.
+            </p>
+          </div>
+          <div className="row" style={{ gap: 8 }}>
+            <div className="row" style={{ gap: 4 }}>
+              <span style={{ fontSize: 12, color: "var(--muted)" }}>Clues/Team:</span>
+              <input
+                type="number"
+                min="1"
+                max="20"
+                value={cluesPerTeamInput}
+                onChange={(e) => setCluesPerTeamInput(e.target.value)}
+                style={{ width: 55, padding: "4px 8px" }}
+              />
+            </div>
+            <button className="btn small secondary" onClick={generateAssignments}>
+              🎲 Generate Clue Assignments
+            </button>
+            <button className="btn small ok" onClick={createNewEvent}>
+              + Create Event
+            </button>
+          </div>
         </div>
-        <p className="muted" style={{ marginBottom: 8 }}>
-          {event?.name} · {event?.duration} min · remaining {Math.round((event?.remainingMs || 0) / 1000)}s
-        </p>
-        <div className="row">
-          <button className="btn" onClick={() => setStatus("ACTIVE")}>
-            ⚓ {effectiveStatus === "ENDED" ? "Restart Event" : effectiveStatus === "NOT_STARTED" ? "Start Event" : "Resume Event"}
-          </button>
-          {effectiveStatus === "ACTIVE" && (
-            <button className="btn secondary" onClick={() => setStatus("PAUSED")}>
-              ⏸ Pause Event
-            </button>
+
+        <div className="row" style={{ marginTop: 12, gap: 12 }}>
+          <select
+            value={selectedEventId}
+            onChange={(e) => setSelectedEventId(e.target.value)}
+            style={{ maxWidth: 320, padding: 8, borderRadius: 6 }}
+          >
+            {events.map((e) => (
+              <option key={e._id} value={e._id}>
+                {e.name} ({STATUS_LABEL[e.status] || e.status})
+              </option>
+            ))}
+          </select>
+
+          {event && (
+            <div className="row" style={{ gap: 8 }}>
+              <span className={`pill ${effectiveStatus === "RUNNING" || effectiveStatus === "ACTIVE" ? "ok" : "warn"}`}>
+                {STATUS_LABEL[effectiveStatus] || effectiveStatus}
+              </span>
+              <button className="btn small" onClick={() => setStatus("RUNNING")}>Start / Resume</button>
+              <button className="btn small secondary" onClick={() => setStatus("PAUSED")}>Pause</button>
+              <button className="btn small danger" onClick={() => setStatus("ENDED")}>End</button>
+              <button className="btn small danger" style={{ background: "#8b0000" }} onClick={() => setShowDeleteModal(true)}>
+                🗑️ Delete Event
+              </button>
+            </div>
           )}
-          {effectiveStatus === "ACTIVE" && (
-            <button className="btn danger" onClick={() => setStatus("ENDED")}>
-              🏴‍☠️ End Event
-            </button>
-          )}
-          <button className="btn ghost danger" onClick={resetEvent}>
-            💀 Restart Event
-          </button>
         </div>
       </div>
 
+      {showDeleteModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}>
+          <div className="card" style={{ maxWidth: 440, width: "100%", background: "var(--bg-2)", border: "1px solid var(--danger)" }}>
+            <h3 style={{ color: "var(--danger)", margin: "0 0 12px" }}>🗑️ Delete Event ({event?.name})</h3>
+            <p style={{ fontSize: 13, color: "var(--muted)", marginBottom: 16 }}>
+              Select which associated event data should also be permanently purged:
+            </p>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 16 }}>
+              <label className="row"><input type="checkbox" checked={delTeams} onChange={(e) => setDelTeams(e.target.checked)} /> <span>Registered Teams</span></label>
+              <label className="row"><input type="checkbox" checked={delClues} onChange={(e) => setDelClues(e.target.checked)} /> <span>Clues Pool</span></label>
+              <label className="row"><input type="checkbox" checked={delQRs} onChange={(e) => setDelQRs(e.target.checked)} /> <span>QR Codes</span></label>
+              <label className="row"><input type="checkbox" checked={delLogs} onChange={(e) => setDelLogs(e.target.checked)} /> <span>Audit Logs & Submissions</span></label>
+              <label className="row"><input type="checkbox" checked={delQuests} onChange={(e) => setDelQuests(e.target.checked)} /> <span>Side Quests</span></label>
+            </div>
+            <div className="row" style={{ gap: 8 }}>
+              <button className="btn small danger" style={{ flex: 1 }} onClick={handleDeleteEvent}>Confirm Delete</button>
+              <button className="btn small secondary" onClick={() => setShowDeleteModal(false)}>Cancel</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {stats && (
-        <div className="card">
-          <h3 style={{ fontFamily: "var(--font-heading)", color: "var(--gold)" }}>📊 Statistics</h3>
+        <div className="card" style={{ marginBottom: 20 }}>
+          <h3 style={{ color: "var(--gold)" }}>📊 Active Event Statistics</h3>
           <div className="stat-grid">
             {[
               ["🏴‍☠️ Teams", stats.totalTeams],
               ["⚓ Active", stats.activeTeams],
               ["✅ Completed", stats.completedTeams],
-              ["💀 Disabled", stats.disabledTeams],
               ["🗿 QR Scans", stats.totalQRScans],
-              ["✅ Correct", stats.correctScans],
-              ["⚓ Wrong", stats.wrongScans],
               ["📜 Submissions", stats.totalSubmissions],
-              ["🗺️ Clues", stats.totalClues],
               ["💰 Total Points", stats.totalPointsAwarded],
-              ["📊 Average Points", stats.averageScore],
             ].map(([lbl, num]) => (
               <div className="stat" key={lbl}>
                 <div className="num">{num}</div>
@@ -204,106 +415,202 @@ function Overview({ token, run, flash }) {
         </div>
       )}
 
-      <div className="card">
-        <h3 style={{ fontFamily: "var(--font-heading)", color: "var(--gold)" }}>⚙️ Event Settings</h3>
-        {event && !settingsDraft && (
-          <button className="btn secondary small" onClick={() => setSettingsDraft(event.settings || {})}>
-            Edit Settings
-          </button>
-        )}
-        {settingsDraft && (
-          <form onSubmit={saveSettings}>
-            <h4 style={{ marginTop: 0, fontFamily: "var(--font-heading)" }}>General</h4>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
-              <T label="Event Name" state={settingsDraft.name} set={(v) => setSettingsDraft({ ...settingsDraft, name: v })} />
-              <T label="Duration (minutes)" type="number" state={settingsDraft.duration} set={(v) => setSettingsDraft({ ...settingsDraft, duration: v })} />
-              <T label="Max Team Size" type="number" state={settingsDraft.maxTeamSize} set={(v) => setSettingsDraft({ ...settingsDraft, maxTeamSize: v })} />
-              <T label="Max Attempts / Clue" type="number" state={settingsDraft.maxAttemptsPerClue} set={(v) => setSettingsDraft({ ...settingsDraft, maxAttemptsPerClue: v })} />
-            </div>
+      {event && (
+        <div className="card">
+          <div className="spread">
+            <h3 style={{ color: "var(--gold)" }}>⚙️ Event Rules & Config</h3>
+            {!settingsDraft && (
+              <button className="btn secondary small" onClick={() => setSettingsDraft({ settings: event.settings || {}, theme: event.theme || {} })}>
+                Edit Settings
+              </button>
+            )}
+          </div>
 
-            <h4 style={{ fontFamily: "var(--font-heading)" }}>💰 Points System</h4>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
-              <T label="Correct QR Points" type="number" state={settingsDraft.correctQRPoints} set={(v) => setSettingsDraft({ ...settingsDraft, correctQRPoints: v })} />
-              <T label="Clue Completion Bonus" type="number" state={settingsDraft.clueCompletionPoints} set={(v) => setSettingsDraft({ ...settingsDraft, clueCompletionPoints: v })} />
-              <T label="Wrong QR Penalty" type="number" state={settingsDraft.wrongScanPenalty} set={(v) => setSettingsDraft({ ...settingsDraft, wrongScanPenalty: v })} />
-              <T label="Wrong Answer Penalty" type="number" state={settingsDraft.wrongAnswerPenalty} set={(v) => setSettingsDraft({ ...settingsDraft, wrongAnswerPenalty: v })} />
-              <T label="Hint 1 Cost" type="number" state={settingsDraft.hint1Penalty} set={(v) => setSettingsDraft({ ...settingsDraft, hint1Penalty: v })} />
-              <T label="Hint 2 Cost" type="number" state={settingsDraft.hint2Penalty} set={(v) => setSettingsDraft({ ...settingsDraft, hint2Penalty: v })} />
-              <T label="Final Treasure Points" type="number" state={settingsDraft.finalChallengePoints} set={(v) => setSettingsDraft({ ...settingsDraft, finalChallengePoints: v })} />
-            </div>
+          {settingsDraft && (
+            <form onSubmit={saveSettings} style={{ marginTop: 16 }}>
+              <h4>📜 Event Rules & Regulations</h4>
+              <div className="field">
+                <textarea
+                  rows={4}
+                  value={settingsDraft.rulesAndRegulations ?? event.rulesAndRegulations ?? ""}
+                  onChange={(e) => setSettingsDraft({
+                    ...settingsDraft,
+                    rulesAndRegulations: e.target.value
+                  })}
+                  placeholder="Enter event rules and guidelines for players..."
+                />
+              </div>
 
-            <h4 style={{ fontFamily: "var(--font-heading)" }}>⚡ Speed Bonus</h4>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
-              <T label="Max Speed Bonus" type="number" state={settingsDraft.speedBonusMax} set={(v) => setSettingsDraft({ ...settingsDraft, speedBonusMax: v })} />
-              <T label="Tier 1: within (sec)" type="number" state={settingsDraft.speedBonusT1} set={(v) => setSettingsDraft({ ...settingsDraft, speedBonusT1: v })} />
-              <T label="Tier 1: points" type="number" state={settingsDraft.speedBonusP1} set={(v) => setSettingsDraft({ ...settingsDraft, speedBonusP1: v })} />
-              <T label="Tier 2: within (sec)" type="number" state={settingsDraft.speedBonusT2} set={(v) => setSettingsDraft({ ...settingsDraft, speedBonusT2: v })} />
-              <T label="Tier 2: points" type="number" state={settingsDraft.speedBonusP2} set={(v) => setSettingsDraft({ ...settingsDraft, speedBonusP2: v })} />
-              <T label="Tier 3: within (sec)" type="number" state={settingsDraft.speedBonusT3} set={(v) => setSettingsDraft({ ...settingsDraft, speedBonusT3: v })} />
-              <T label="Tier 3: points" type="number" state={settingsDraft.speedBonusP3} set={(v) => setSettingsDraft({ ...settingsDraft, speedBonusP3: v })} />
-            </div>
-
-            <h4 style={{ fontFamily: "var(--font-heading)" }}>🔧 Toggles</h4>
-            <div className="row" style={{ flexWrap: "wrap" }}>
-              <B label="Wrong QR penalties" state={settingsDraft.wrongScanPenaltyEnabled} set={(v) => setSettingsDraft({ ...settingsDraft, wrongScanPenaltyEnabled: v })} />
-              <B label="Wrong answer penalties" state={settingsDraft.wrongAnswerPenaltyEnabled} set={(v) => setSettingsDraft({ ...settingsDraft, wrongAnswerPenaltyEnabled: v })} />
-              <B label="Speed bonus" state={settingsDraft.speedBonusEnabled} set={(v) => setSettingsDraft({ ...settingsDraft, speedBonusEnabled: v })} />
-              <B label="Lock after max wrong scans" state={settingsDraft.lockAfterMaxWrongScans} set={(v) => setSettingsDraft({ ...settingsDraft, lockAfterMaxWrongScans: v })} />
-              <B label="Allow negative points" state={settingsDraft.allowNegativeScore} set={(v) => setSettingsDraft({ ...settingsDraft, allowNegativeScore: v })} />
-              <B label="Bonus QRs" state={settingsDraft.bonusQREnabled} set={(v) => setSettingsDraft({ ...settingsDraft, bonusQREnabled: v })} />
-              <B label="Wrong QRs" state={settingsDraft.trapQREnabled} set={(v) => setSettingsDraft({ ...settingsDraft, trapQREnabled: v })} />
-              <B label="Hint QRs" state={settingsDraft.hintQREnabled} set={(v) => setSettingsDraft({ ...settingsDraft, hintQREnabled: v })} />
-              <B label="Checkpoint QRs" state={settingsDraft.checkpointQREnabled} set={(v) => setSettingsDraft({ ...settingsDraft, checkpointQREnabled: v })} />
-              <B label="Leaderboard visible" state={settingsDraft.leaderboardVisible} set={(v) => setSettingsDraft({ ...settingsDraft, leaderboardVisible: v })} />
-            </div>
-
-            <h4 style={{ fontFamily: "var(--font-heading)" }}>🏝️ Island Names</h4>
-            <p className="muted" style={{ fontSize: 13, marginTop: -8, marginBottom: 8 }}>
-              Customize the name shown for each island on the level map. Leave blank to use defaults.
-            </p>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
-              {[1,2,3,4,5,6,7,8,9,10,11,12,13].map((n) => (
-                <div className="field" key={n}>
-                  <label>Island {n}</label>
+              <h4>🎨 Dynamic Event Website Theme</h4>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 16 }}>
+                <div className="field">
+                  <label>Primary Theme Color</label>
                   <input
-                    value={settingsDraft.islandNames?.[n] ?? ""}
+                    type="color"
+                    value={settingsDraft.theme?.primaryColor || "#10b981"}
                     onChange={(e) => setSettingsDraft({
                       ...settingsDraft,
-                      islandNames: { ...settingsDraft.islandNames, [n]: e.target.value },
+                      theme: { ...settingsDraft.theme, primaryColor: e.target.value }
                     })}
-                    placeholder={`Island ${n}`}
                   />
                 </div>
-              ))}
-            </div>
+              </div>
 
-            <div className="row" style={{ marginTop: 12 }}>
-              <button className="btn" type="submit">
-                Save Settings
-              </button>
-              <button className="btn secondary" type="button" onClick={() => setSettingsDraft(null)}>
-                Cancel
-              </button>
-            </div>
-          </form>
-        )}
-      </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+                <label className="row">
+                  <input
+                    type="checkbox"
+                    checked={settingsDraft.settings?.enableSecretCode !== false}
+                    onChange={(e) => setSettingsDraft({
+                      ...settingsDraft,
+                      settings: { ...settingsDraft.settings, enableSecretCode: e.target.checked }
+                    })}
+                  />
+                  <span>Enable Physical Secret Code Form for Players</span>
+                </label>
+                <div className="field">
+                  <label>Accent Gold Color</label>
+                  <input
+                    type="color"
+                    value={settingsDraft.theme?.accentColor || "#f59e0b"}
+                    onChange={(e) => setSettingsDraft({
+                      ...settingsDraft,
+                      theme: { ...settingsDraft.theme, accentColor: e.target.value }
+                    })}
+                  />
+                </div>
+                <div className="field">
+                  <label>Background Color</label>
+                  <input
+                    type="color"
+                    value={settingsDraft.theme?.backgroundColor || "#0f172a"}
+                    onChange={(e) => setSettingsDraft({
+                      ...settingsDraft,
+                      theme: { ...settingsDraft.theme, backgroundColor: e.target.value }
+                    })}
+                  />
+                </div>
+              </div>
+              <h4>Wrong QR Blocking Engine</h4>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <div className="field">
+                  <label>Clues Per Team (Random Pool Limit)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={settingsDraft.settings?.cluesPerTeam || 5}
+                    onChange={(e) => setSettingsDraft({
+                      ...settingsDraft,
+                      settings: { ...settingsDraft.settings, cluesPerTeam: Number(e.target.value) }
+                    })}
+                  />
+                </div>
+                <div className="field">
+                  <label>Physical Treasure Secret Code</label>
+                  <input
+                    type="text"
+                    value={settingsDraft.settings?.finalSecretCode || "CAMPUS404"}
+                    onChange={(e) => setSettingsDraft({
+                      ...settingsDraft,
+                      settings: { ...settingsDraft.settings, finalSecretCode: e.target.value }
+                    })}
+                  />
+                </div>
+              </div>
+
+              <h4>Wrong QR Blocking Engine</h4>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+                <label className="row">
+                  <input
+                    type="checkbox"
+                    checked={!!settingsDraft.settings?.wrongScanBlockingEnabled}
+                    onChange={(e) => setSettingsDraft({
+                      ...settingsDraft,
+                      settings: { ...settingsDraft.settings, wrongScanBlockingEnabled: e.target.checked }
+                    })}
+                  />
+                  <span>Enable Wrong-Scan Blocking Engine</span>
+                </label>
+                <div className="field">
+                  <label>Strategy</label>
+                  <select
+                    value={settingsDraft.settings?.wrongScanBlockStrategy || "TIME"}
+                    onChange={(e) => setSettingsDraft({
+                      ...settingsDraft,
+                      settings: { ...settingsDraft.settings, wrongScanBlockStrategy: e.target.value }
+                    })}
+                  >
+                    <option value="TIME">Time Block (Minutes)</option>
+                    <option value="SCAN_COUNT">Scan Count Block</option>
+                    <option value="BOTH">Both (Time & Scan Count)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="row" style={{ marginTop: 16 }}>
+                <button className="btn" type="submit">Save Rules</button>
+                <button className="btn secondary" type="button" onClick={() => setSettingsDraft(null)}>Cancel</button>
+              </div>
+            </form>
+          )}
+        </div>
+      )}
     </>
   );
 }
 
 /* ------------------------------------------------------------------ */
 
-function Teams({ token, run, flash }) {
+function Teams({ token, run, flash, eventId }) {
   const [teams, setTeams] = useState([]);
+
+  if (!eventId) {
+    return (
+      <div className="card alert warn">
+        ⚠️ <strong>No Active Event Selected:</strong> Please select or create an event using the Event Context bar above to view and manage registered teams.
+      </div>
+    );
+  }
   const [search, setSearch] = useState("");
   const [pointsMap, setPointsMap] = useState({});
   const [unlockMap, setUnlockMap] = useState({});
+  const [passMap, setPassMap] = useState({});
+  const [showPassMap, setShowPassMap] = useState({});
+  const [bulkCount, setBulkCount] = useState(5);
+  const [generatedTeams, setGeneratedTeams] = useState(null);
+  const [showAddTeam, setShowAddTeam] = useState(false);
+  const [newTeamName, setNewTeamName] = useState("");
+  const [newTeamId, setNewTeamId] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+
+  const handleAddSingleTeam = async (e) => {
+    e.preventDefault();
+    await run(() => api.post(`/events/${eventId}/teams`, {
+      teamName: newTeamName,
+      teamId: newTeamId,
+      password: newPassword,
+    }, { token }));
+    flash(`Team "${newTeamName}" registered!`);
+    setShowAddTeam(false);
+    setNewTeamName("");
+    setNewTeamId("");
+    setNewPassword("");
+    load().catch(() => {});
+  };
+
+  const handleBulkGenerate = async () => {
+    const res = await run(() => api.post(`/events/${eventId}/bulk-teams`, { count: Number(bulkCount) }, { token }));
+    const newTeams = res.teams || res || [];
+    setGeneratedTeams((prev) => (prev ? [...prev, ...newTeams] : newTeams));
+    flash(`Bulk generated ${newTeams.length} teams!`);
+    load().catch(() => {});
+  };
 
   const load = useCallback(async () => {
-    const data = await run(() => api.get("/admin/teams", { token }));
+    const query = eventId ? `?eventId=${eventId}` : "";
+    const data = await run(() => api.get(`/admin/teams${query}`, { token }));
     setTeams(data.teams || []);
-  }, [token]);
+  }, [token, eventId]);
 
   useEffect(() => {
     load().catch(() => {});
@@ -312,41 +619,98 @@ function Teams({ token, run, flash }) {
   const refresh = () => load().catch(() => {});
 
   const filtered = teams.filter(
-    (t) => !search || (t.teamName + t.teamId + (t.members || []).map((m) => m.fullName).join(" ")).toLowerCase().includes(search.toLowerCase())
+    (t) => !search || (t.teamName + t.teamId).toLowerCase().includes(search.toLowerCase())
   );
 
   return (
     <div className="card">
       <div className="spread" style={{ marginBottom: 12 }}>
-        <h3 style={{ margin: 0, fontFamily: "var(--font-heading)", color: "var(--gold)" }}>
-          🏴‍☠️ Teams ({teams.length})
-        </h3>
-        <input
-          style={{ maxWidth: 240 }}
-          placeholder="Search name / ID / member..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-        />
+        <h3 style={{ margin: 0, color: "var(--gold)" }}>🏴‍☠️ Registered Teams ({teams.length})</h3>
+        <div className="row" style={{ gap: 8 }}>
+          <button className="btn small ok" onClick={() => setShowAddTeam(!showAddTeam)}>
+            {showAddTeam ? "Cancel" : "+ Add Single Team"}
+          </button>
+          <input
+            type="number"
+            min="1"
+            max="50"
+            value={bulkCount}
+            onChange={(e) => setBulkCount(e.target.value)}
+            style={{ width: 70 }}
+          />
+          <button className="btn small secondary" onClick={handleBulkGenerate}>
+            ⚡ Bulk Generate Teams
+          </button>
+          <input
+            style={{ maxWidth: 180 }}
+            placeholder="Search team..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
       </div>
 
-      {filtered.length === 0 && <p className="muted">No teams match.</p>}
-      {filtered.map((t) => (
-        <div key={t._id} className="card" style={{ background: "var(--bg-2)", padding: 14 }}>
+      {showAddTeam && (
+        <form onSubmit={handleAddSingleTeam} style={{ background: "var(--bg-2)", padding: 12, borderRadius: 6, marginBottom: 16 }}>
+          <h4 style={{ margin: "0 0 12px", color: "var(--gold)" }}>+ Add Individual Team</h4>
+          <div className="field"><label>Team Name</label><input value={newTeamName} onChange={(e) => setNewTeamName(e.target.value)} required /></div>
+          <div className="field"><label>Team ID (Unique)</label><input value={newTeamId} onChange={(e) => setNewTeamId(e.target.value)} placeholder="e.g. TEAM-DRAGON" required /></div>
+          <div className="field"><label>Password</label><input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} required /></div>
+          <button className="btn small" type="submit" style={{ marginTop: 8 }}>Register Team</button>
+        </form>
+      )}
+
+      {generatedTeams && (
+        <div className="card" style={{ background: "var(--bg-2)", marginBottom: 16 }}>
+          <div className="spread">
+            <h4 style={{ margin: 0, color: "var(--gold)" }}>⚡ Generated Teams Output</h4>
+            <button className="btn small ghost" onClick={() => setGeneratedTeams(null)}>Dismiss</button>
+          </div>
+          <table className="board" style={{ marginTop: 8 }}>
+            <thead>
+              <tr><th>Team ID</th><th>Team Name</th><th>Password</th></tr>
+            </thead>
+            <tbody>
+              {generatedTeams.map((gt, idx) => (
+                <tr key={idx}>
+                  <td className="mono">{gt.teamId}</td>
+                  <td>{gt.teamName}</td>
+                  <td className="mono">{gt.password}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {teams.length === 0 ? (
+        <div className="card muted" style={{ textAlign: "center", padding: 20 }}>
+          No teams registered for this event yet. Use Bulk Generate Teams above or share the registration link!
+        </div>
+      ) : filtered.map((t) => (
+        <div key={t._id} className="card" style={{ background: "var(--bg-2)", padding: 14, marginBottom: 8 }}>
           <div className="spread">
             <div>
               <strong>{t.teamName}</strong> <span className="muted mono">{t.teamId}</span>
-              <div className="muted" style={{ fontSize: 13 }}>
-                Points <b className="mono" style={{ color: "var(--gold)" }}>{t.points}</b> · Level {t.currentLevel || t.currentClue || 1} · Clue {t.currentClue} ·{" "}
-                {t.solvedClues?.length} solved · {t.wrongScans} wrong QRs
+              <div className="muted" style={{ fontSize: 13, display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: 2 }}>
+                <span>Points: <b style={{ color: "var(--gold)" }}>{t.points}</b> · Status: {t.status} · Level {t.currentLevel || 1} · Password:</span>
+                <span className="mono" style={{ background: "var(--bg-3)", padding: "2px 6px", borderRadius: 4, color: "var(--gold)", fontWeight: 700 }}>
+                  {showPassMap[t._id] ? (t.plainPassword || t.password || "(Reset password to view)") : "••••••"}
+                </span>
+                <button
+                  type="button"
+                  className="btn small ghost"
+                  style={{ padding: "2px 6px", fontSize: 11 }}
+                  onClick={() => setShowPassMap((prev) => ({ ...prev, [t._id]: !prev[t._id] }))}
+                  title="Toggle Password Visibility"
+                >
+                  {showPassMap[t._id] ? "🙈 Hide" : "👁️ Show"}
+                </button>
               </div>
-              <span className={`pill ${t.status === "active" ? "ok" : t.status === "completed" ? "info" : "danger"}`}>
-                {t.status}
-              </span>{" "}
-              {t.lockedClue && <span className="pill warn">locked</span>}
             </div>
-            <div className="row">
+            <div className="row" style={{ gap: 6 }}>
               <input
-                style={{ width: 90 }}
+                style={{ width: 80 }}
                 placeholder="delta"
                 value={pointsMap[t._id] ?? ""}
                 onChange={(e) => setPointsMap({ ...pointsMap, [t._id]: e.target.value })}
@@ -355,14 +719,32 @@ function Teams({ token, run, flash }) {
                 className="btn small"
                 onClick={async () => {
                   await run(() => api.put(`/admin/teams/${t._id}/points`, { delta: Number(pointsMap[t._id] || 0) }, { token }));
-                  flash("Points updated");
+                  flash("Points adjusted");
                   refresh();
                 }}
               >
                 Adjust
               </button>
               <input
-                style={{ width: 70 }}
+                style={{ width: 90 }}
+                placeholder="new pass"
+                value={passMap[t._id] ?? ""}
+                onChange={(e) => setPassMap({ ...passMap, [t._id]: e.target.value })}
+              />
+              <button
+                className="btn small ghost"
+                onClick={async () => {
+                  if (!passMap[t._id]) return flash("Enter a new password first");
+                  await run(() => api.put(`/admin/teams/${t._id}/password`, { password: passMap[t._id] }, { token }));
+                  flash(`Password changed for ${t.teamName}`);
+                  setPassMap({ ...passMap, [t._id]: "" });
+                  refresh();
+                }}
+              >
+                Set Pass
+              </button>
+              <input
+                style={{ width: 60 }}
                 placeholder="clue#"
                 value={unlockMap[t._id] ?? ""}
                 onChange={(e) => setUnlockMap({ ...unlockMap, [t._id]: e.target.value })}
@@ -378,21 +760,11 @@ function Teams({ token, run, flash }) {
                 Unlock
               </button>
               <button
-                className="btn small secondary"
-                onClick={async () => {
-                  await run(() => api.patch(`/admin/teams/${t._id}/status`, {}, { token }));
-                  flash("Team status toggled");
-                  refresh();
-                }}
-              >
-                {t.status === "disabled" ? "Enable" : "Disable"}
-              </button>
-              <button
                 className="btn small danger"
                 onClick={async () => {
                   if (!window.confirm(`Reset progress for ${t.teamName}?`)) return;
                   await run(() => api.post(`/admin/teams/${t._id}/reset`, {}, { token }));
-                  flash("Team reset — sent back to Level 1");
+                  flash("Team reset");
                   refresh();
                 }}
               >
@@ -408,70 +780,236 @@ function Teams({ token, run, flash }) {
 
 /* ------------------------------------------------------------------ */
 
-function Clues({ token, run, flash }) {
-  const [clues, setClues] = useState([]);
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({
-    clueNumber: "",
-    title: "",
-    description: "",
-    checkpointName: "",
-    answerType: "TEXT",
-    correctAnswer: "",
-    acceptedAnswers: "",
-    points: 10,
-    maxAttempts: 3,
-    isFinal: false,
-    hints: "",
-  });
+function Assignments({ token, run, eventId }) {
+  const [assignments, setAssignments] = useState([]);
+  const [search, setSearch] = useState("");
+
+  if (!eventId) {
+    return (
+      <div className="card alert warn">
+        ⚠️ <strong>No Active Event Selected:</strong> Please select or create an event using the Event Context bar above to view assigned clue sequences.
+      </div>
+    );
+  }
 
   const load = useCallback(async () => {
-    const data = await run(() => api.get("/admin/clues", { token }));
-    setClues(data.clues || []);
-  }, [token]);
+    try {
+      const data = await run(() => api.get(`/events/${eventId}/clue-assignments`, { token }));
+      setAssignments(Array.isArray(data) ? data : []);
+    } catch {
+      setAssignments([]);
+    }
+  }, [token, eventId, run]);
 
   useEffect(() => {
     load().catch(() => {});
   }, [load]);
 
-  const set = (k) => (e) => setForm({ ...form, [k]: e.target.value });
+  // Group assignments by team
+  const teamsMap = {};
+  for (const a of assignments) {
+    const tId = a.teamId?._id || a.teamId || "unknown";
+    const teamName = a.teamId?.teamName || "Unknown Team";
+    const teamCode = a.teamId?.teamId || "";
+    if (!teamsMap[tId]) {
+      teamsMap[tId] = { teamName, teamCode, seq: [] };
+    }
+    teamsMap[tId].seq.push(a);
+  }
+
+  const teamList = Object.values(teamsMap).filter(
+    (t) => !search || (t.teamName + t.teamCode).toLowerCase().includes(search.toLowerCase())
+  );
+
+  return (
+    <div className="card">
+      <div className="spread" style={{ marginBottom: 12 }}>
+        <div>
+          <h3 style={{ margin: 0, color: "var(--gold)" }}>🔀 Team Clue Sequence Inspector</h3>
+          <p className="muted" style={{ fontSize: 13, marginTop: 4 }}>
+            Review assigned clue orders across all teams for the active event.
+          </p>
+        </div>
+        <input
+          style={{ maxWidth: 220 }}
+          placeholder="Filter team..."
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+      </div>
+
+      {teamList.length === 0 ? (
+        <div className="card muted" style={{ textAlign: "center", padding: 20 }}>
+          No clue assignments generated for this event yet. Go to ⚓ Overview & Events and click 🎲 Generate Clue Assignments!
+        </div>
+      ) : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {teamList.map((t, idx) => (
+            <div key={idx} className="card" style={{ background: "var(--bg-2)", padding: 14 }}>
+              <div style={{ fontWeight: 700, fontSize: 16, color: "var(--gold)", marginBottom: 8 }}>
+                🏴‍☠️ {t.teamName} <span className="muted mono" style={{ fontSize: 13 }}>({t.teamCode})</span>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+                {t.seq
+                  .sort((a, b) => a.sequenceNumber - b.sequenceNumber)
+                  .map((item) => (
+                    <div
+                      key={item._id}
+                      style={{
+                        background: item.isFinal ? "var(--gold-dark, #78350f)" : "var(--bg-3, #334155)",
+                        border: item.isFinal ? "1px solid var(--gold)" : "1px solid var(--border)",
+                        borderRadius: 6,
+                        padding: "8px 12px",
+                        fontSize: 13,
+                        minWidth: 140,
+                      }}
+                    >
+                      <div style={{ fontSize: 11, color: item.isFinal ? "var(--gold)" : "var(--muted)", fontWeight: 700 }}>
+                        STEP {item.sequenceNumber} {item.isFinal ? "🏆 FINAL" : ""}
+                      </div>
+                      <div style={{ fontWeight: 600, marginTop: 2 }}>
+                        {item.clueId ? `#${item.clueId.clueNumber} ${item.clueId.title}` : "Clue Deleted"}
+                      </div>
+                      {item.clueId?.checkpointName && (
+                        <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>
+                          📍 {item.clueId.checkpointName}
+                        </div>
+                      )}
+                    </div>
+                  ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+function ClueListItem({ clue, token, run, flash, remove, load }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div
+      className="card"
+      style={{
+        background: "var(--bg-2)",
+        padding: 12,
+        marginBottom: 8,
+        cursor: "pointer",
+        borderLeft: expanded ? "4px solid var(--gold)" : "none",
+      }}
+      onClick={() => setExpanded(!expanded)}
+    >
+      <div className="spread">
+        <div>
+          <strong>#{clue.clueNumber} {clue.title}</strong> — {clue.points} pts ({clue.checkpointName})
+          {clue.isFinal && <span className="pill ok" style={{ marginLeft: 8, fontSize: 11 }}>🏆 FINAL TREASURE CLUE</span>}
+          <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
+            {expanded ? "▲ Click to hide details" : "▼ Click to reveal riddle, answers & hints"}
+          </div>
+        </div>
+        <div className="row" style={{ gap: 6 }} onClick={(e) => e.stopPropagation()}>
+          <button
+            className={`btn small ${clue.isFinal ? "ok" : "secondary"}`}
+            onClick={async () => {
+              await run(() => api.put(`/admin/clues/${clue._id}`, { isFinal: !clue.isFinal }, { token }));
+              flash(clue.isFinal ? "Unmarked as final clue" : "Marked as final clue!");
+              load().catch(() => {});
+            }}
+          >
+            {clue.isFinal ? "🏆 Final Clue" : "Make Final"}
+          </button>
+          <button className="btn small danger" onClick={() => remove(clue._id)}>Delete</button>
+        </div>
+      </div>
+
+      {expanded && (
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)", fontSize: 13 }} onClick={(e) => e.stopPropagation()}>
+          <p style={{ margin: "0 0 8px", lineHeight: 1.5 }}>
+            <strong>📜 Riddle / Question:</strong> {clue.description}
+          </p>
+          <p style={{ margin: "0 0 8px" }}>
+            <strong>🔑 Correct Answer:</strong> <span className="mono" style={{ color: "var(--gold)" }}>{clue.correctAnswer || "None"}</span>
+          </p>
+          {(clue.hints || []).length > 0 && (
+            <div>
+              <strong>💡 Hints:</strong>
+              <ul style={{ margin: "4px 0 0", paddingLeft: 20 }}>
+                {clue.hints.map((h, i) => (
+                  <li key={i}>
+                    Hint {i + 1}: "{h.text}" (-{h.penalty} pts)
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Clues({ token, run, flash, eventId }) {
+  const [clues, setClues] = useState([]);
+
+  if (!eventId) {
+    return (
+      <div className="card alert warn">
+        ⚠️ <strong>No Active Event Selected:</strong> Please select or create an event using the Event Context bar above to view and manage clues.
+      </div>
+    );
+  }
+  const [showForm, setShowForm] = useState(false);
+  const [showBulk, setShowBulk] = useState(false);
+  const [bulkJson, setBulkJson] = useState("");
+  const [form, setForm] = useState({
+    clueNumber: "",
+    title: "",
+    description: "",
+    checkpointName: "",
+    correctAnswer: "",
+    points: 10,
+  });
+
+  const load = useCallback(async () => {
+    const query = eventId ? `?eventId=${eventId}` : "";
+    const data = await run(() => api.get(`/admin/clues${query}`, { token }));
+    setClues(data.clues || []);
+  }, [token, eventId]);
+
+  useEffect(() => {
+    load().catch(() => {});
+  }, [load]);
 
   const create = async (e) => {
     e.preventDefault();
+    const query = eventId ? `?eventId=${eventId}` : "";
     await run(() =>
       api.post(
-        "/admin/clues",
+        `/admin/clues${query}`,
         {
+          eventId,
           clueNumber: Number(form.clueNumber),
           title: form.title,
           description: form.description,
           checkpointName: form.checkpointName,
-          answerType: form.answerType,
           correctAnswer: form.correctAnswer,
-          acceptedAnswers: form.acceptedAnswers.split(",").map((a) => a.trim()).filter(Boolean),
           points: Number(form.points),
-          maxAttempts: Number(form.maxAttempts),
-          isFinal: form.isFinal,
-          hints: form.hints
-            .split("|")
-            .map((h) => {
-              const [text, penalty = "0"] = h.split("/");
-              return { text: text.trim(), penalty: Number(penalty) };
-            })
-            .filter((h) => h.text),
         },
         { token }
       )
     );
     flash("Clue created");
     setShowForm(false);
-    setForm({ ...form, clueNumber: "", title: "", description: "", checkpointName: "", correctAnswer: "" });
     load().catch(() => {});
   };
 
-  const remove = async (clue) => {
-    if (!window.confirm(`Delete Clue #${clue.clueNumber} "${clue.title}"? Its QR code entry will be removed too.`)) return;
-    await run(() => api.del(`/admin/clues/${clue._id}`, { token }));
+  const remove = async (id) => {
+    if (!window.confirm("Delete this clue?")) return;
+    await run(() => api.del(`/admin/clues/${id}`, { token }));
     flash("Clue deleted");
     load().catch(() => {});
   };
@@ -479,88 +1017,141 @@ function Clues({ token, run, flash }) {
   return (
     <div className="card">
       <div className="spread" style={{ marginBottom: 12 }}>
-        <h3 style={{ margin: 0, fontFamily: "var(--font-heading)", color: "var(--gold)" }}>
-          📜 Clues ({clues.length})
-        </h3>
-        <button className="btn small" onClick={() => setShowForm(!showForm)}>
-          {showForm ? "Close form" : "+ New Clue"}
-        </button>
+        <h3 style={{ color: "var(--gold)", margin: 0 }}>📜 Clue Pool ({clues.length})</h3>
+        <div className="row" style={{ gap: 8 }}>
+          <button
+            className="btn small secondary"
+            onClick={() => {
+              const csvContent = "data:text/csv;charset=utf-8," +
+                ["Clue Number,Title,Checkpoint,Points,Answer,Is Final"]
+                  .concat(clues.map((c) => `${c.clueNumber},"${c.title}","${c.checkpointName || ""}",${c.points},"${c.correctAnswer || ""}",${c.isFinal}`))
+                  .join("\n");
+              const encodedUri = encodeURI(csvContent);
+              const link = document.createElement("a");
+              link.setAttribute("href", encodedUri);
+              link.setAttribute("download", `event_${eventId}_clues.csv`);
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+            }}
+          >
+            📥 Download All Clues
+          </button>
+          <button className="btn small secondary" onClick={() => setShowBulk(!showBulk)}>
+            {showBulk ? "Cancel Bulk" : "⚡ Bulk Upload Clues"}
+          </button>
+          <button className="btn small" onClick={() => setShowForm(!showForm)}>
+            {showForm ? "Cancel" : "+ New Clue"}
+          </button>
+        </div>
       </div>
 
-      {showForm && (
-        <form className="card" style={{ background: "var(--bg-2)" }} onSubmit={create}>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0 16px" }}>
-            <div className="field">
-              <label>Clue Number</label>
-              <input type="number" value={form.clueNumber} onChange={set("clueNumber")} required />
+      {showBulk && (
+        <div style={{ marginBottom: 16, background: "var(--bg-2)", padding: 12, borderRadius: 6 }}>
+          <div className="spread">
+            <h4 style={{ margin: 0 }}>⚡ Bulk Upload Clues (JSON or CSV/Excel)</h4>
+            <div className="row" style={{ gap: 6 }}>
+              <button
+                type="button"
+                className="btn small ghost"
+                onClick={() => setBulkJson(JSON.stringify([
+                  { clueNumber: 1, title: "Library Secret", description: "Look under desk 3", checkpointName: "Library", correctAnswer: "BOOK", points: 10 },
+                  { clueNumber: 2, title: "Lab Cipher", description: "Read the periodic table", checkpointName: "Science Lab", correctAnswer: "NEON", points: 15 }
+                ], null, 2))}
+              >
+                📄 Demo JSON
+              </button>
+              <button
+                type="button"
+                className="btn small ghost"
+                onClick={() => setBulkJson("clueNumber,title,description,checkpointName,correctAnswer,points\n1,Library Secret,Look under desk 3,Library,BOOK,10\n2,Lab Cipher,Read the periodic table,Science Lab,NEON,15")}
+              >
+                📊 Demo CSV
+              </button>
             </div>
-            <div className="field">
-              <label>Points Reward</label>
-              <input type="number" value={form.points} onChange={set("points")} required />
-            </div>
           </div>
-          <div className="field">
-            <label>Title</label>
-            <input value={form.title} onChange={set("title")} required />
-          </div>
-          <div className="field">
-            <label>Checkpoint Name</label>
-            <input value={form.checkpointName} onChange={set("checkpointName")} required />
-          </div>
-          <div className="field">
-            <label>Description</label>
-            <textarea value={form.description} onChange={set("description")} rows={2} required />
-          </div>
-          <div className="field">
-            <label>Correct Answer</label>
-            <input value={form.correctAnswer} onChange={set("correctAnswer")} required />
-          </div>
-          <div className="field">
-            <label>Accepted Alternatives (comma separated)</label>
-            <input value={form.acceptedAnswers} onChange={set("acceptedAnswers")} placeholder="e.g. Library, The Library" />
-          </div>
-          <div className="field">
-            <label>Hints — format: text/penalty, separated by | (e.g. Smells like paper/2 | Behind the statue/5)</label>
-            <input value={form.hints} onChange={set("hints")} />
-          </div>
-          <div className="row">
-            <div className="field">
-              <label>Max Attempts</label>
-              <input type="number" value={form.maxAttempts} onChange={set("maxAttempts")} style={{ width: 100 }} />
-            </div>
-            <label className="row" style={{ marginBottom: 14 }}>
-              <input type="checkbox" checked={form.isFinal} onChange={(e) => setForm({ ...form, isFinal: e.target.checked })} />
-              <span>🏴‍☠️ Final Clue (Final Treasure)</span>
-            </label>
-          </div>
-          <button className="btn" type="submit">
-            Create Clue
+
+          <textarea
+            rows={6}
+            placeholder="Paste JSON array or CSV text here..."
+            value={bulkJson}
+            onChange={(e) => setBulkJson(e.target.value)}
+            style={{ width: "100%", fontFamily: "monospace", fontSize: 13, marginTop: 8 }}
+          />
+          <button
+            className="btn small"
+            style={{ marginTop: 8 }}
+            onClick={async () => {
+              try {
+                let parsed = [];
+                const trimmed = bulkJson.trim();
+                if (trimmed.startsWith("[")) {
+                  parsed = JSON.parse(trimmed);
+                } else {
+                  // CSV Parser supporting quoted fields with commas
+                  const parseCSVLine = (text) => {
+                    const result = [];
+                    let cur = "";
+                    let inQuotes = false;
+                    for (let i = 0; i < text.length; i++) {
+                      const char = text[i];
+                      if (char === '"' && text[i + 1] === '"') {
+                        cur += '"';
+                        i++;
+                      } else if (char === '"') {
+                        inQuotes = !inQuotes;
+                      } else if (char === ',' && !inQuotes) {
+                        result.push(cur.trim());
+                        cur = "";
+                      } else {
+                        cur += char;
+                      }
+                    }
+                    result.push(cur.trim());
+                    return result;
+                  };
+
+                  const lines = trimmed.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+                  const headers = parseCSVLine(lines[0]);
+                  parsed = lines.slice(1).map((line) => {
+                    const values = parseCSVLine(line);
+                    const obj = {};
+                    headers.forEach((h, idx) => {
+                      let val = values[idx] || "";
+                      if (h === "clueNumber" || h === "points") val = Number(val);
+                      obj[h] = val;
+                    });
+                    return obj;
+                  });
+                }
+                const res = await run(() => api.post(`/events/${eventId}/clues/bulk`, { clues: parsed }, { token }));
+                flash(`Bulk uploaded ${res.inserted || res.length || "clues"} clues!`);
+                setShowBulk(false);
+                setBulkJson("");
+                load().catch(() => {});
+              } catch (err) {
+                flash(`Parse / Upload Error: ${err.message}`);
+              }
+            }}
+          >
+            Submit Bulk Clues
           </button>
+        </div>
+      )}
+
+      {showForm && (
+        <form onSubmit={create} style={{ marginBottom: 16, background: "var(--bg-2)", padding: 12, borderRadius: 6 }}>
+          <div className="field"><label>Clue #</label><input type="number" value={form.clueNumber} onChange={(e) => setForm({ ...form, clueNumber: e.target.value })} required /></div>
+          <div className="field"><label>Title</label><input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required /></div>
+          <div className="field"><label>Checkpoint Name</label><input value={form.checkpointName} onChange={(e) => setForm({ ...form, checkpointName: e.target.value })} required /></div>
+          <div className="field"><label>Description</label><input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} required /></div>
+          <div className="field"><label>Correct Answer</label><input value={form.correctAnswer} onChange={(e) => setForm({ ...form, correctAnswer: e.target.value })} required /></div>
+          <button className="btn small" type="submit" style={{ marginTop: 8 }}>Save Clue</button>
         </form>
       )}
 
       {clues.map((c) => (
-        <div key={c._id} className="card" style={{ background: "var(--bg-2)", padding: 14 }}>
-          <div className="spread">
-            <div>
-              <span className={`pill ${c.isFinal ? "danger" : "info"}`}>#{c.clueNumber}</span>{" "}
-              <strong>{c.title}</strong>{" "}
-              <span className="muted" style={{ fontSize: 13 }}>
-                {c.checkpointName} · {c.points} points · {c.difficulty} · {c.maxAttempts} attempts
-              </span>
-              {!c.active && <span className="pill warn" style={{ marginLeft: 6 }}>inactive</span>}
-              <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>{c.description}</div>
-            </div>
-            <div className="row">
-              <span className="muted mono" style={{ fontSize: 12 }}>
-                ans: {c.correctAnswer}
-              </span>
-              <button className="btn small secondary" onClick={remove}>
-                Delete Clue
-              </button>
-            </div>
-          </div>
-        </div>
+        <ClueListItem key={c._id} clue={c} token={token} run={run} flash={flash} remove={remove} load={load} />
       ))}
     </div>
   );
@@ -568,90 +1159,206 @@ function Clues({ token, run, flash }) {
 
 /* ------------------------------------------------------------------ */
 
-function QRCodes({ token, run, flash }) {
+function QRCodes({ token, run, flash, eventId }) {
   const [qrs, setQrs] = useState([]);
+
+  if (!eventId) {
+    return (
+      <div className="card alert warn">
+        ⚠️ <strong>No Active Event Selected:</strong> Please select or create an event using the Event Context bar above to view and manage QR codes.
+      </div>
+    );
+  }
   const [clues, setClues] = useState([]);
   const [selectedClue, setSelectedClue] = useState("");
-  const [frontendUrl, setFrontendUrl] = useState("");
 
   const load = useCallback(async () => {
+    const query = eventId ? `?eventId=${eventId}` : "";
     const [qrData, clueData] = await Promise.all([
-      run(() => api.get("/admin/qrcodes", { token })),
-      run(() => api.get("/admin/clues", { token })),
+      run(() => api.get(`/admin/qrcodes${query}`, { token })),
+      run(() => api.get(`/admin/clues${query}`, { token })),
     ]);
     setQrs(qrData.qrcodes || []);
-    setFrontendUrl(qrData.frontendUrl || "");
     setClues(clueData.clues || []);
-  }, [token]);
+  }, [token, eventId]);
 
   useEffect(() => {
     load().catch(() => {});
   }, [load]);
 
+  const [logoUrl, setLogoUrl] = useState("");
+  const [customText, setCustomText] = useState("");
+  const [bulkQRType, setBulkQRType] = useState("DUMMY");
+  const [bulkQRCount, setBulkQRCount] = useState(5);
+  const [bulkQRPoints, setBulkQRCountPoints] = useState(10);
+  const [showBulkQR, setShowBulkQR] = useState(false);
+
+  const handleBulkQR = async () => {
+    const query = eventId ? `?eventId=${eventId}` : "";
+    await run(() => api.post(`/admin/qrcodes/bulk${query}`, {
+      type: bulkQRType,
+      count: Number(bulkQRCount),
+      points: Number(bulkQRPoints),
+      eventId,
+    }, { token }));
+    flash(`Generated ${bulkQRCount} ${bulkQRType} QR codes!`);
+    setShowBulkQR(false);
+    load().catch(() => {});
+  };
+
   const generate = async () => {
-    if (!selectedClue) return flash("Select a clue first");
-    const res = await run(() => api.post("/admin/qrcodes/generate", { clueId: selectedClue }, { token }));
-    flash(res.message || "Clue QR generated");
+    if (!selectedClue) return flash("Select a clue first or choose ALL Clues.");
+    if (clues.length === 0) return flash("No clues created for this event yet. Create or upload clues first!");
+
+    const query = eventId ? `?eventId=${eventId}` : "";
+
+    if (selectedClue === "ALL") {
+      let createdCount = 0;
+      for (const clue of clues) {
+        try {
+          await run(() => api.post(`/admin/qrcodes/generate${query}`, {
+            clueId: clue._id,
+            eventId,
+            branding: { logo: logoUrl, customText }
+          }, { token }));
+          createdCount++;
+        } catch {
+          /* skip if QR already exists */
+        }
+      }
+      flash(`Generated QR Codes for all clues (${createdCount} processed)!`);
+    } else {
+      await run(() => api.post(`/admin/qrcodes/generate${query}`, {
+        clueId: selectedClue,
+        eventId,
+        branding: { logo: logoUrl, customText }
+      }, { token }));
+      flash("QR Code generated with custom branding");
+    }
+
+    setLogoUrl("");
+    setCustomText("");
     load().catch(() => {});
   };
 
   const toggle = async (qr) => {
     await run(() => api.patch(`/admin/qrcodes/${qr._id}/toggle`, {}, { token }));
-    flash(`Clue QR ${qr.qrId} ${qr.active ? "activated" : "deactivated"}`);
+    flash("QR active state toggled");
     load().catch(() => {});
   };
 
-  const hasQR = new Set(
-    (qrs || [])
-      .filter((q) => q.type === "NORMAL" && q.clueId)
-      .map((q) => (typeof q.clueId === "object" ? q.clueId._id : q.clueId))
-  );
-
   return (
     <div className="card">
-      <div className="row" style={{ marginBottom: 14 }}>
-        <select value={selectedClue} onChange={(e) => setSelectedClue(e.target.value)} style={{ maxWidth: 260 }}>
-          <option value="">— select Clue —</option>
-          {clues.map((c) => (
-            <option key={c._id} value={c._id}>
-              #{c.clueNumber} {c.title}
-              {hasQR.has(c._id) ? " (exists)" : " (new)"}
-            </option>
-          ))}
-        </select>
-        <button className="btn small" onClick={generate}>
-          Generate QR for Clue
-        </button>
-      </div>
-      <p className="muted" style={{ fontSize: 13, marginTop: -8, marginBottom: 12 }}>
-        Clues marked <span className="mono">(exists)</span> already have a QR code. Pick one marked <span className="mono">(new)</span> to create its QR.
-      </p>
+      <div className="spread" style={{ marginBottom: 12 }}>
+        <div className="row" style={{ gap: 12 }}>
+          <h3 style={{ color: "var(--gold)", margin: 0 }}>🗺️ Event QR Codes ({qrs.length})</h3>
+          <button className="btn small secondary" onClick={() => setShowBulkQR(!showBulkQR)}>
+            ⚡ Bulk QR Generator
+          </button>
+          <button
+            className="btn small secondary"
+            onClick={async () => {
+              try {
+                flash("Generating QR Images Package...");
+                const data = await run(() => api.get(`/events/${eventId}/qrcodes/zip`, { token }));
+                const list = data.qrcodes || [];
+                if (list.length === 0) return flash("No QR codes to download.");
 
-      {qrs.length === 0 && <p className="muted">No QR codes yet. Create clues first, then generate QRs.</p>}
-      <div className="alert" style={{ margin: "12px 0" }}>
-        To generate QR images / a printable sheet, run from the backend directory:
-        <code style={{ display: "block", marginTop: 6 }}>
-          npm run generate:qrs {"&&"} npm run print:qrs
-        </code>
-        (creates <code>backend/qr-sheets.html</code> — open in browser and print).
+                // Download individual PNG images or package
+                for (let i = 0; i < list.length; i++) {
+                  const item = list[i];
+                  const a = document.createElement("a");
+                  a.href = item.dataUrl;
+                  a.download = `QR_${item.qrId}_${item.type}_${(item.checkpointName || "Checkpoint").replace(/[^a-zA-Z0-9]/g, "_")}.png`;
+                  document.body.appendChild(a);
+                  a.click();
+                  document.body.removeChild(a);
+                  await new Promise((r) => setTimeout(r, 150));
+                }
+                flash(`Downloaded ${list.length} QR Code PNG Images!`);
+              } catch (err) {
+                flash(`Download Error: ${err.message}`);
+              }
+            }}
+          >
+            🖼️ Download All QR Images (PNG)
+          </button>
+        </div>
+        <div className="row" style={{ gap: 8 }}>
+          <select value={selectedClue} onChange={(e) => setSelectedClue(e.target.value)}>
+            <option value="">— Select Clue —</option>
+            {clues.length > 0 && <option value="ALL">★ ALL Clues — Mass Generate QRs ★</option>}
+            {clues.map((c) => <option key={c._id} value={c._id}>#{c.clueNumber} {c.title}</option>)}
+          </select>
+          <input
+            placeholder="Logo Image URL..."
+            value={logoUrl}
+            onChange={(e) => setLogoUrl(e.target.value)}
+            style={{ width: 140 }}
+          />
+          <input
+            placeholder="Overlay Description Text..."
+            value={customText}
+            onChange={(e) => setCustomText(e.target.value)}
+            style={{ width: 160 }}
+          />
+          <button className="btn small" onClick={generate}>Generate QR</button>
+        </div>
       </div>
+
+      {clues.length === 0 && (
+        <div className="alert warn" style={{ marginBottom: 16 }}>
+          ⚠️ <strong>No clues created for this event yet.</strong> Use the 📜 Clues & Pool tab to create or bulk upload clues before generating clue QR codes!
+        </div>
+      )}
+
+      {showBulkQR && (
+        <div style={{ background: "var(--bg-2)", padding: 12, borderRadius: 6, marginBottom: 16 }}>
+          <h4 style={{ margin: "0 0 8px", color: "var(--gold)" }}>⚡ Bulk Generate Dummy, Trap & Bonus QR Codes</h4>
+          <div className="row" style={{ gap: 8 }}>
+            <select value={bulkQRType} onChange={(e) => setBulkQRType(e.target.value)}>
+              <option value="DUMMY">Dummy QR (Wrong Checkpoint)</option>
+              <option value="TRAP">Trap QR (Deducts Points)</option>
+              <option value="BONUS">Bonus QR (Awards Points)</option>
+            </select>
+            <input
+              type="number"
+              min="1"
+              max="50"
+              value={bulkQRCount}
+              onChange={(e) => setBulkQRCount(e.target.value)}
+              placeholder="Count"
+              style={{ width: 80 }}
+            />
+            <input
+              type="number"
+              value={bulkQRPoints}
+              onChange={(e) => setBulkQRCountPoints(e.target.value)}
+              placeholder="Points/Penalty"
+              style={{ width: 110 }}
+            />
+            <button className="btn small" onClick={handleBulkQR}>Generate Bulk QRs</button>
+          </div>
+        </div>
+      )}
+
       {qrs.map((qr) => (
-        <div key={qr._id} className="card" style={{ background: "var(--bg-2)", padding: 14 }}>
+        <div key={qr._id} className="card" style={{ background: "var(--bg-2)", padding: 14, marginBottom: 8 }}>
           <div className="spread">
             <div>
-              <span className={`pill ${qr.active ? "ok" : "warn"}`}>{qr.active ? "active" : "inactive"}</span>{" "}
-              <span className="mono" style={{ fontWeight: 700 }}>{qr.qrId}</span>{" "}
-              <span className={`pill info`}>{qr.type}</span>{" "}
-              {qr.level > 0 && <span className="pill info">Level {qr.level}</span>}{" "}
-              {qr.clueId && (
-                <span className="muted" style={{ fontSize: 13 }}>
-                  #{qr.clueId.clueNumber} {qr.clueId.title}
-                </span>
+              <span className="mono" style={{ fontWeight: 700, fontSize: 16, color: "var(--gold)" }}>{qr.qrId}</span>
+              <span className="pill info" style={{ marginLeft: 8, fontSize: 11 }}>Type: {qr.type}</span>
+              {qr.checkpointName && <span className="muted" style={{ marginLeft: 8, fontSize: 13 }}>({qr.checkpointName})</span>}
+              {qr.branding?.customText && (
+                <div style={{ fontSize: 12, color: "var(--gold-light)", marginTop: 4 }}>
+                  🏷️ Label Text: "{qr.branding.customText}"
+                </div>
               )}
-              {qr.checkpointName && <div className="muted" style={{ fontSize: 13 }}>{qr.checkpointName}</div>}
-              <div className="muted mono" style={{ fontSize: 12, wordBreak: "break-all" }}>
-                {frontendUrl}/scan/{qr.qrId}
-              </div>
+              {qr.branding?.logo && (
+                <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
+                  🖼️ Logo URL: <span className="mono">{qr.branding.logo}</span>
+                </div>
+              )}
             </div>
             <button className="btn small secondary" onClick={() => toggle(qr)}>
               {qr.active ? "Deactivate" : "Activate"}
@@ -665,36 +1372,266 @@ function QRCodes({ token, run, flash }) {
 
 /* ------------------------------------------------------------------ */
 
-function Audit({ token, run }) {
-  const [logs, setLogs] = useState([]);
+function SideQuestListItem({ quest }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div
+      className="card"
+      style={{
+        background: "var(--bg-2)",
+        padding: 12,
+        marginBottom: 8,
+        cursor: "pointer",
+        borderLeft: expanded ? "4px solid var(--gold)" : "none",
+      }}
+      onClick={() => setExpanded(!expanded)}
+    >
+      <div className="spread">
+        <div>
+          <strong>🎯 {quest.title}</strong> (+{quest.points} pts) — Code Reward: <span className="mono" style={{ color: "var(--gold)" }}>{quest.secretCodeReward || "None"}</span>
+          <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
+            {expanded ? "▲ Click to collapse question" : "▼ Click to reveal question & answer"}
+          </div>
+        </div>
+      </div>
+
+      {expanded && (
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)", fontSize: 13 }}>
+          <p style={{ margin: "0 0 8px", lineHeight: 1.5 }}>
+            <strong>📜 Question / Riddle:</strong> {quest.description}
+          </p>
+          <p style={{ margin: 0 }}>
+            <strong>🔑 Answer:</strong> <span className="mono" style={{ color: "var(--gold)" }}>{quest.answer || "N/A"}</span>
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function SideQuests({ token, run, flash, eventId }) {
+  const [quests, setQuests] = useState([]);
+
+  if (!eventId) {
+    return (
+      <div className="card alert warn">
+        ⚠️ <strong>No Active Event Selected:</strong> Please select or create an event using the Event Context bar above to view and manage side quests.
+      </div>
+    );
+  }
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [points, setPoints] = useState(25);
+  const [answer, setAnswer] = useState("");
+  const [secretCodeReward, setSecretCodeReward] = useState("");
+  const [showBulk, setShowBulk] = useState(false);
+  const [bulkJson, setBulkJson] = useState("");
+
+  const load = useCallback(async () => {
+    if (!eventId) return;
+    const qData = await run(() => api.get(`/events/${eventId}/side-quests`, { token }));
+    setQuests(qData || []);
+  }, [token, eventId]);
 
   useEffect(() => {
-    run(() => api.get("/admin/audit", { token }))
-      .then((data) => setLogs(data.logs || []))
-      .catch(() => {});
-  }, [token]);
+    load().catch(() => {});
+  }, [load]);
+
+  const create = async (e) => {
+    e.preventDefault();
+    if (!eventId) return;
+
+    await run(() => api.post(`/events/${eventId}/side-quests`, {
+      eventId, title, description, points: Number(points), answer, secretCodeReward
+    }, { token }));
+
+    flash("Side quest created!");
+    setTitle("");
+    setDescription("");
+    load().catch(() => {});
+  };
 
   return (
     <div className="card">
-      <h3 style={{ fontFamily: "var(--font-heading)", color: "var(--gold)" }}>
-        📋 Activity Log ({logs.length})
-      </h3>
-      {logs.length === 0 && <p className="muted">No entries in the activity log yet.</p>}
+      <div className="spread" style={{ marginBottom: 12 }}>
+        <h3 style={{ color: "var(--gold)", margin: 0 }}>🎯 Event Side Quests ({quests.length})</h3>
+        <button className="btn small secondary" onClick={() => setShowBulk(!showBulk)}>
+          {showBulk ? "Cancel Bulk" : "⚡ Bulk Upload Side Quests"}
+        </button>
+      </div>
+
+      {showBulk && (
+        <div style={{ marginBottom: 16, background: "var(--bg-2)", padding: 12, borderRadius: 6 }}>
+          <div className="spread">
+            <h4 style={{ margin: 0 }}>⚡ Bulk Upload Side Quests (JSON or CSV/Excel)</h4>
+            <div className="row" style={{ gap: 6 }}>
+              <button
+                type="button"
+                className="btn small ghost"
+                onClick={() => setBulkJson(JSON.stringify([
+                  { title: "Library Riddle", description: "What has keys but no locks?", points: 25, answer: "piano", secretCodeReward: "X7" },
+                  { title: "Math Challenge", description: "Solve 12 x 12", points: 20, answer: "144", secretCodeReward: "K9" }
+                ], null, 2))}
+              >
+                📄 Demo JSON
+              </button>
+              <button
+                type="button"
+                className="btn small ghost"
+                onClick={() => setBulkJson("title,description,points,answer,secretCodeReward\nLibrary Riddle,What has keys but no locks?,25,piano,X7\nMath Challenge,Solve 12 x 12,20,144,K9")}
+              >
+                📊 Demo CSV
+              </button>
+            </div>
+          </div>
+
+          <textarea
+            rows={6}
+            placeholder="Paste JSON array or CSV text here..."
+            value={bulkJson}
+            onChange={(e) => setBulkJson(e.target.value)}
+            style={{ width: "100%", fontFamily: "monospace", fontSize: 13, marginTop: 8 }}
+          />
+          <button
+            className="btn small"
+            style={{ marginTop: 8 }}
+            onClick={async () => {
+              try {
+                let parsed = [];
+                const trimmed = bulkJson.trim();
+                if (trimmed.startsWith("[")) {
+                  parsed = JSON.parse(trimmed);
+                } else {
+                  const parseCSVLine = (text) => {
+                    const result = [];
+                    let cur = "";
+                    let inQuotes = false;
+                    for (let i = 0; i < text.length; i++) {
+                      const char = text[i];
+                      if (char === '"' && text[i + 1] === '"') {
+                        cur += '"';
+                        i++;
+                      } else if (char === '"') {
+                        inQuotes = !inQuotes;
+                      } else if (char === ',' && !inQuotes) {
+                        result.push(cur.trim());
+                        cur = "";
+                      } else {
+                        cur += char;
+                      }
+                    }
+                    result.push(cur.trim());
+                    return result;
+                  };
+
+                  const lines = trimmed.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+                  const headers = parseCSVLine(lines[0]);
+                  parsed = lines.slice(1).map((line) => {
+                    const values = parseCSVLine(line);
+                    const obj = {};
+                    headers.forEach((h, idx) => {
+                      let val = values[idx] || "";
+                      if (h === "points") val = Number(val);
+                      obj[h] = val;
+                    });
+                    return obj;
+                  });
+                }
+                const res = await run(() => api.post(`/events/${eventId}/side-quests/bulk`, { quests: parsed }, { token }));
+                flash(`Bulk uploaded ${res.inserted || res.length || "quests"} side quests!`);
+                setShowBulk(false);
+                setBulkJson("");
+                load().catch(() => {});
+              } catch (err) {
+                flash(`Parse / Upload Error: ${err.message}`);
+              }
+            }}
+          >
+            Submit Bulk Side Quests
+          </button>
+        </div>
+      )}
+
+      <form onSubmit={create} style={{ background: "var(--bg-2)", padding: 12, borderRadius: 6, marginBottom: 16 }}>
+        <div className="field"><label>Title</label><input value={title} onChange={(e) => setTitle(e.target.value)} required /></div>
+        <div className="field"><label>Description</label><input value={description} onChange={(e) => setDescription(e.target.value)} required /></div>
+        <div className="field"><label>Points</label><input type="number" value={points} onChange={(e) => setPoints(e.target.value)} required /></div>
+        <div className="field"><label>Correct Answer</label><input value={answer} onChange={(e) => setAnswer(e.target.value)} required /></div>
+        <div className="field"><label>Secret Code Fragment Reward</label><input value={secretCodeReward} onChange={(e) => setSecretCodeReward(e.target.value)} /></div>
+        <button className="btn small" type="submit" style={{ marginTop: 8 }}>Create Side Quest</button>
+      </form>
+
+      {quests.map((q) => (
+        <SideQuestListItem key={q._id} quest={q} />
+      ))}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+function Audit({ token, run, eventId }) {
+  const [logs, setLogs] = useState([]);
+  const [actionFilter, setActionFilter] = useState("");
+  const [search, setSearch] = useState("");
+
+  if (!eventId) {
+    return (
+      <div className="card alert warn">
+        ⚠️ <strong>No Active Event Selected:</strong> Please select or create an event using the Event Context bar above to view activity logs.
+      </div>
+    );
+  }
+
+  const loadLogs = useCallback(() => {
+    let query = eventId ? `?eventId=${eventId}` : "";
+    if (actionFilter) query += `&action=${encodeURIComponent(actionFilter)}`;
+    if (search) query += `&search=${encodeURIComponent(search)}`;
+    run(() => api.get(`/admin/audit${query}`, { token }))
+      .then((data) => setLogs(data.logs || []))
+      .catch(() => {});
+  }, [token, eventId, actionFilter, search, run]);
+
+  useEffect(() => {
+    loadLogs();
+  }, [loadLogs]);
+
+  return (
+    <div className="card">
+      <div className="spread" style={{ marginBottom: 12 }}>
+        <h3 style={{ color: "var(--gold)", margin: 0 }}>📋 Activity Log ({logs.length})</h3>
+        <div className="row" style={{ gap: 8 }}>
+          <select value={actionFilter} onChange={(e) => setActionFilter(e.target.value)}>
+            <option value="">All Action Types</option>
+            <option value="POINTS_MANUAL">Points Manual</option>
+            <option value="ADMIN_ADJUST_SCORE">Admin Adjust Score</option>
+            <option value="CLUE_CREATED">Clue Created</option>
+            <option value="CLUE_UPDATED">Clue Updated</option>
+            <option value="CLUE_DELETED">Clue Deleted</option>
+            <option value="CLUE_MANUAL_UNLOCK">Clue Unlocked</option>
+            <option value="QR_CREATED">QR Created</option>
+            <option value="QR_TOGGLED">QR Toggled</option>
+            <option value="TEAM_STATUS_CHANGED">Team Status Changed</option>
+            <option value="TEAM_RESET">Team Reset</option>
+            <option value="BULK_TEAMS_GENERATED">Bulk Teams Generated</option>
+            <option value="ADMIN_BLOCK_TEAM">Admin Block Team</option>
+            <option value="ADMIN_UNBLOCK_TEAM">Admin Unblock Team</option>
+          </select>
+          <input
+            placeholder="Search activity note/admin..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            style={{ maxWidth: 220 }}
+          />
+        </div>
+      </div>
+
       <ul className="list">
         {logs.map((l) => (
           <li key={l._id}>
-            <span className="row" style={{ justifyContent: "space-between" }}>
-              <span>
-                <span className="pill info">{l.action}</span>{" "}
-                <span className="muted mono" style={{ fontSize: 12 }}>
-                  {l.targetType} {l.targetId}
-                </span>
-              </span>
-              <span className="muted" style={{ fontSize: 12 }}>
-                {l.adminName} · {new Date(l.createdAt).toLocaleString()}
-              </span>
-            </span>
-            {l.note && <div className="muted" style={{ fontSize: 13, marginTop: 4 }}>{l.note}</div>}
+            <span className="pill info" style={{ fontSize: 11 }}>{l.action}</span>{" "}
+            <strong>{l.adminName || "Admin"}</strong>: {l.note}
           </li>
         ))}
       </ul>

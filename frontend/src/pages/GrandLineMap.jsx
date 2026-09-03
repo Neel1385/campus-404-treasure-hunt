@@ -14,64 +14,62 @@ const DEFAULT_NAMES = {
 export default function GrandLineMap() {
   const { team, token } = useAuth();
   const [me, setMe] = useState(null);
-  const [islandNames, setIslandNames] = useState({});
-  const [totalLevels, setTotalLevels] = useState(0);
+  const [assignments, setAssignments] = useState([]);
+  const [selectedNode, setSelectedNode] = useState(null);
   const [error, setError] = useState("");
 
   useEffect(() => {
     if (!token) return;
     Promise.all([
       api.get("/teams/me", { token }),
-      api.get("/event/status"),
-    ]).then(([meData, evData]) => {
-      setMe(meData);
-      setTotalLevels(meData.totalLevels || meData.totalClues || 0);
-      setIslandNames(evData.event?.islandNames || {});
-    }).catch(() => setError("Could not load Grand Line map data."));
+      api.get("/game/my-assignments", { token }).catch(() => ({ assignments: [] })),
+    ])
+      .then(([meData, assignData]) => {
+        setMe(meData);
+        setAssignments(assignData.assignments || []);
+      })
+      .catch(() => setError("Could not load Grand Line map data."));
   }, [token]);
-
-  const getIslandName = (level, total) => {
-    if (level === total) return "Laugh Tale";
-    return islandNames[level] || DEFAULT_NAMES[level] || `Island ${level}`;
-  };
 
   const teamData = me?.team || team;
   const currentLevel = teamData?.currentLevel || teamData?.currentClue || 1;
   const completedLevels = teamData?.completedLevels || [];
   const solvedClues = teamData?.solvedClues || [];
 
+  const totalSteps = assignments.length > 0 ? assignments.length : (me?.totalLevels || me?.totalClues || 0);
+
   return (
     <div>
-      <div className="container">
+      <div className="container" style={{ maxWidth: 880 }}>
         <div style={{ textAlign: "center", marginBottom: 24 }}>
           <div style={{ fontSize: 48, marginBottom: 8 }}>🧭</div>
           <h1 style={{ fontFamily: "var(--font-display)", color: "var(--gold)", margin: 0 }}>
-            The Grand Line
+            THE GRAND LINE TREASURE MAP
           </h1>
           <p className="muted" style={{ fontFamily: "var(--font-parchment)", fontStyle: "italic", fontSize: 16 }}>
-            Your voyage through the New World
+            Chart your pirate crew's voyage across the sea
           </p>
         </div>
 
         {error && <div className="alert error">{error}</div>}
 
-        {totalLevels > 0 && (
-          <div className="card" style={{ marginBottom: 24 }}>
+        {totalSteps > 0 && (
+          <div className="card" style={{ marginBottom: 24, background: "var(--bg-2)", borderLeft: "4px solid var(--gold)" }}>
             <div className="spread" style={{ marginBottom: 8 }}>
               <span className="muted" style={{ fontFamily: "var(--font-heading)", fontSize: 12, textTransform: "uppercase", letterSpacing: "0.08em" }}>
                 Voyage Progress
               </span>
               <span className="mono" style={{ color: "var(--gold)", fontSize: 14 }}>
-                {completedLevels.length} / {totalLevels} Islands Conquered
+                {completedLevels.length} / {totalSteps} Islands Conquered
               </span>
             </div>
-            <div style={{ background: "rgba(13,15,20,0.6)", borderRadius: 999, height: 8, border: "1px solid rgba(212,168,67,0.1)" }}>
+            <div style={{ background: "rgba(13,15,20,0.6)", borderRadius: 999, height: 10, border: "1px solid rgba(212,168,67,0.2)" }}>
               <div
                 style={{
-                  background: "linear-gradient(90deg, var(--ok), var(--gold))",
+                  background: "linear-gradient(90deg, #10b981, #f59e0b)",
                   borderRadius: 999,
                   height: "100%",
-                  width: `${totalLevels > 0 ? (completedLevels.length / totalLevels) * 100 : 0}%`,
+                  width: `${totalSteps > 0 ? (completedLevels.length / totalSteps) * 100 : 0}%`,
                   transition: "width 0.5s ease",
                 }}
               />
@@ -79,71 +77,156 @@ export default function GrandLineMap() {
           </div>
         )}
 
-        <div className="log-pose-card" style={{ marginBottom: 24 }}>
-          <h3>🧭 Log Pose Reading</h3>
-          <div className="destination">
-            {teamData?.status === "completed"
-              ? "🏴‍☠️ LAUGH TALE REACHED!"
-              : getIslandName(currentLevel, totalLevels)}
-          </div>
-          <p className="muted" style={{ margin: 0, fontSize: 14 }}>
-            {teamData?.status === "completed"
-              ? "You have found the One Piece! The greatest treasure is yours."
-              : `Follow the Log Pose to ${getIslandName(currentLevel, totalLevels)}. Find the QR Code and decode its message.`}
-          </p>
-        </div>
-
-        <div className="grand-line-map">
-          {totalLevels > 0 ? (
-            Array.from({ length: totalLevels }, (_, i) => {
-              const level = i + 1;
-              const isCompleted = completedLevels.includes(level);
-              const isCurrent = level === currentLevel && teamData?.status !== "completed";
-              const isLocked = level > currentLevel;
-              const solved = solvedClues.find((s) => s.clueNumber === level);
-
-              const icon = level === totalLevels ? "🏴‍☠️" : ISLAND_ICONS[level] || "🏝️";
-              const name = getIslandName(level, totalLevels);
-
-              return (
-                <div key={level}>
-                  <div
-                    className={`island-node ${isCompleted ? "completed" : ""} ${isCurrent ? "current" : ""} ${isLocked ? "locked" : ""}`}
-                  >
-                    <div className="island-icon">{icon}</div>
-                    <div className="island-info">
-                      <h4>{name}</h4>
-                      <p>
-                        {isCompleted && solved
-                          ? `Decoded! +${solved.pointsEarned} points`
-                          : isCurrent
-                          ? "Currently here — find the QR Code!"
-                          : isLocked
-                          ? "Locked — complete previous islands first"
-                          : ""}
-                      </p>
-                    </div>
-                    <div className="island-status">
-                      {isCompleted ? "✅" : isCurrent ? "🧭" : "🔒"}
-                    </div>
-                  </div>
-                  {level < totalLevels && (
-                    <div className={`island-connector ${isCompleted ? "completed" : ""}`} />
-                  )}
-                </div>
-              );
-            })
-          ) : (
-            <div className="card muted" style={{ textAlign: "center", padding: 48 }}>
-              <div style={{ fontSize: 64, marginBottom: 12 }}>🗺️</div>
-              <h3>The Grand Line is being charted...</h3>
-              <p>No islands have been discovered yet. The voyage will begin soon.</p>
+        {/* Nautical Parchment Map Container */}
+        <div
+          style={{
+            background: "linear-gradient(135deg, #1e293b 0%, #0f172a 100%)",
+            border: "2px solid var(--gold)",
+            borderRadius: 12,
+            padding: "28px 24px",
+            boxShadow: "0 10px 30px rgba(0,0,0,0.5)",
+            marginBottom: 24,
+            position: "relative",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+            <div style={{ fontSize: 13, color: "var(--gold)", fontWeight: 700, letterSpacing: "0.05em" }}>
+              ⛵ CREW LOCATION: LEVEL {currentLevel}
             </div>
-          )}
+            <div style={{ fontSize: 12, color: "var(--muted)" }}>
+              Click unlocked nodes to inspect island details
+            </div>
+          </div>
+
+          <div className="grand-line-map" style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {totalSteps > 0 ? (
+              assignments.length > 0 ? (
+                assignments.map((item) => {
+                  const level = item.sequenceNumber;
+                  const isCompleted = completedLevels.includes(level);
+                  const isCurrent = level === currentLevel && teamData?.status !== "completed";
+                  const isLocked = level > currentLevel;
+                  const clueObj = item.clueId || {};
+                  const solved = solvedClues.find((s) => s.clueNumber === clueObj.clueNumber || s.clueNumber === level);
+
+                  const icon = item.isFinal || level === totalSteps ? "🏆" : ISLAND_ICONS[level] || "🏝️";
+                  const checkpointName = clueObj.checkpointName || clueObj.title || `Island Step ${level}`;
+
+                  return (
+                    <div key={item._id || level} style={{ position: "relative" }}>
+                      <div
+                        className={`island-node ${isCompleted ? "completed" : ""} ${isCurrent ? "current" : ""} ${isLocked ? "locked" : ""}`}
+                        onClick={() => !isLocked && setSelectedNode({ level, name: checkpointName, title: clueObj.title, solved, isCurrent, isCompleted, isFinal: item.isFinal })}
+                        style={{
+                          padding: "16px 20px",
+                          borderRadius: 8,
+                          background: isCurrent
+                            ? "rgba(245, 158, 11, 0.15)"
+                            : isCompleted
+                            ? "rgba(16, 185, 129, 0.1)"
+                            : "rgba(30, 41, 59, 0.6)",
+                          border: isCurrent
+                            ? "2px solid var(--gold)"
+                            : isCompleted
+                            ? "1px solid var(--event-primary, #10b981)"
+                            : "1px dashed var(--border)",
+                          filter: isLocked ? "blur(3px) opacity(0.35)" : "none",
+                          cursor: isLocked ? "not-allowed" : "pointer",
+                          transition: "all 0.2s ease",
+                        }}
+                      >
+                        <div className="island-icon" style={{ fontSize: 28 }}>{icon}</div>
+                        <div className="island-info" style={{ flex: 1, marginLeft: 16 }}>
+                          <h4 style={{ margin: 0, fontSize: 16, color: isCurrent ? "var(--gold)" : "var(--text)" }}>
+                            Step {level}: {checkpointName} {isCurrent && <span style={{ fontSize: 14 }}>⛵ (Current Station)</span>}
+                          </h4>
+                          <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--muted)" }}>
+                            {isCompleted
+                              ? `Decoded! +${solved?.pointsEarned || clueObj.points || 10} pts`
+                              : isCurrent
+                              ? `Current Station — Find the QR Code at ${checkpointName}!`
+                              : isLocked
+                              ? "🔒 Locked — Complete previous stations first"
+                              : "Unlocked"}
+                          </p>
+                        </div>
+                        <div className="island-status" style={{ fontSize: 20 }}>
+                          {isCompleted ? "✅" : isCurrent ? "🧭" : "🔒"}
+                        </div>
+                      </div>
+
+                      {level < totalSteps && (
+                        <div
+                          style={{
+                            width: 2,
+                            height: 16,
+                            margin: "0 auto",
+                            background: isCompleted ? "var(--event-primary, #10b981)" : "var(--border)",
+                          }}
+                        />
+                      )}
+                    </div>
+                  );
+                })
+              ) : (
+                Array.from({ length: totalSteps }, (_, i) => {
+                  const level = i + 1;
+                  const isCompleted = completedLevels.includes(level);
+                  const isCurrent = level === currentLevel && teamData?.status !== "completed";
+                  const isLocked = level > currentLevel;
+
+                  return (
+                    <div key={level} style={{ position: "relative" }}>
+                      <div
+                        className={`island-node ${isCompleted ? "completed" : ""} ${isCurrent ? "current" : ""} ${isLocked ? "locked" : ""}`}
+                        style={{
+                          padding: "16px 20px",
+                          borderRadius: 8,
+                          background: "rgba(30, 41, 59, 0.6)",
+                          border: "1px dashed var(--border)",
+                          filter: isLocked ? "blur(3px) opacity(0.35)" : "none",
+                        }}
+                      >
+                        <div className="island-icon" style={{ fontSize: 28 }}>🏝️</div>
+                        <div className="island-info" style={{ flex: 1, marginLeft: 16 }}>
+                          <h4 style={{ margin: 0, fontSize: 16 }}>Step {level}: Station {level}</h4>
+                          <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--muted)" }}>
+                            {isCompleted ? "Completed" : isCurrent ? "Current Station" : "Locked"}
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })
+              )
+            ) : (
+              <div className="card muted" style={{ textAlign: "center", padding: 48 }}>
+                <div style={{ fontSize: 64, marginBottom: 12 }}>🗺️</div>
+                <h3>The Grand Line map is being charted...</h3>
+              </div>
+            )}
+          </div>
         </div>
+
+        {/* Selected Island Inspector Modal / Card */}
+        {selectedNode && (
+          <div className="card animate-fade-in" style={{ marginBottom: 24, background: "var(--bg-2)", borderLeft: "4px solid var(--gold)" }}>
+            <div className="spread">
+              <h3 style={{ margin: 0, color: "var(--gold)" }}>📍 Island Log Details: {selectedNode.name}</h3>
+              <button className="btn small ghost" onClick={() => setSelectedNode(null)}>Dismiss</button>
+            </div>
+            <div style={{ marginTop: 12, fontSize: 14 }}>
+              <p><strong>Level Number:</strong> {selectedNode.level}</p>
+              <p><strong>Voyage Status:</strong> {selectedNode.isCompleted ? "✅ Conquered & Solved" : selectedNode.isCurrent ? "🧭 Active Log Pose Station" : "🔒 Uncharted"}</p>
+              {selectedNode.solved && (
+                <p><strong>Points Earned:</strong> <span style={{ color: "var(--gold)" }}>+{selectedNode.solved.pointsEarned} pts</span></p>
+              )}
+            </div>
+          </div>
+        )}
 
         <p className="muted" style={{ textAlign: "center", marginTop: 24, fontFamily: "var(--font-heading)" }}>
-          <Link to="/dashboard">← Return to the Grand Line</Link>
+          <Link to="/dashboard">← Return to Dashboard</Link>
         </p>
       </div>
     </div>

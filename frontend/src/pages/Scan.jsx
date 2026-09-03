@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { Html5Qrcode } from "html5-qrcode";
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
+import { useEvent } from "../EventContext.jsx";
 
 function extractQrId(text) {
   const raw = String(text || "").trim();
@@ -21,6 +22,7 @@ export default function Scan() {
   const { qrId } = useParams();
   const navigate = useNavigate();
   const { isLoggedIn, team: authTeam, token, logout } = useAuth();
+  const { currentEvent } = useEvent();
 
   const [manual, setManual] = useState(qrId || "");
   const [result, setResult] = useState(null);
@@ -37,9 +39,10 @@ export default function Scan() {
 
   useEffect(() => {
     if (isLoggedIn && token) {
-      api.get("/teams/me", { token }).then((d) => setTeamData(d.team)).catch(() => {});
+      const param = currentEvent?._id ? `?eventId=${currentEvent._id}` : "";
+      api.get(`/teams/me${param}`, { token }).then((d) => setTeamData(d.team)).catch(() => {});
     }
-  }, [isLoggedIn, token]);
+  }, [isLoggedIn, token, currentEvent]);
 
   const runScan = async (id) => {
     if (!isLoggedIn) {
@@ -51,7 +54,9 @@ export default function Scan() {
     setShowWarning(false);
     setBusy(true);
     try {
-      const data = await api.post("/game/scan", { qrId: id }, { token });
+      const payload = { qrId: id };
+      if (currentEvent?._id) payload.eventId = currentEvent._id;
+      const data = await api.post("/game/scan", payload, { token });
       setResult(data);
     } catch (err) {
       if (err.status === 401) {
@@ -132,7 +137,7 @@ export default function Scan() {
 
   return (
     <div className="container narrow">
-      <h1 style={{ marginTop: 56 }}>🗿 Scan QR Code</h1>
+      <h1 style={{ marginTop: 56 }}>🗿 Scan QR Code {currentEvent ? `(${currentEvent.name})` : ""}</h1>
 
       {busy && !result && (
         <div className="scan-hero">

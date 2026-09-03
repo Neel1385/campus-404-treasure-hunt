@@ -1,33 +1,57 @@
 // CAMPUS 404 database seeder.
-//   npm run seed            -> seeds admin + 10 clues + QR codes + 5 sample teams
+//   npm run seed            -> seeds admin + default Event + 10 clues + QR codes + 5 sample teams
 //   npm run seed -- --admin-only   -> only the admin account
-//
-// Sample teams log in with password: demo1234
 
 const path = require("path");
 require("dotenv").config({ path: path.join(__dirname, "..", ".env") });
 
 const { connectDB, disconnectDB } = require("../src/config/db");
-const { Team, Clue, QRCode } = require("../src/models");
+const { Team, Clue, QRCode, Event, SideQuest, TeamClueAssignment } = require("../src/models");
 const { admin } = require("../src/config/env");
 const qrService = require("../src/services/qrService");
+const { EVENT_STATUS } = require("../src/utils/constants");
 
 const args = process.argv.slice(2);
 const adminOnly = args.includes("--admin-only");
 
-async function seedAdmin() {
-  const existing = await Team.findOne({ role: "admin", email: admin.email });
+async function seedEvent() {
+  let event = await Event.findOne({}).sort({ createdAt: -1 });
+  if (!event) {
+    event = await Event.create({
+      name: "CAMPUS 404 - GRAND HUNT",
+      description: "SCAN. SOLVE. SEARCH. SURVIVE.",
+      status: EVENT_STATUS.RUNNING,
+      duration: 120,
+      settings: {
+        cluesPerTeam: 5,
+        wrongScanPenaltyEnabled: true,
+        wrongScanPenalty: 5,
+        wrongScanBlockingEnabled: true,
+        wrongScanBlockStrategy: "SCAN_COUNT",
+        wrongScanBlockThreshold: 3,
+        wrongScanBlockedScanCount: 3,
+      },
+    });
+    console.log(`[seed] Event created: ${event.name} (${event._id})`);
+  } else {
+    console.log(`[seed] Using existing Event: ${event.name} (${event._id})`);
+  }
+  return event;
+}
+
+async function seedAdmin(event) {
+  let existing = await Team.findOne({ role: "admin", email: admin.email });
   if (existing) {
+    existing.eventId = event._id;
     existing.teamName = admin.name;
     existing.passwordHash = admin.password;
-
-    
     await existing.save();
     console.log(`[seed] Admin updated: ${admin.email} (${existing.teamId})`);
     return existing;
   }
 
   const created = await Team.create({
+    eventId: event._id,
     teamId: "ADMIN-1",
     teamName: admin.name,
     email: admin.email,
@@ -85,7 +109,6 @@ const clueData = [
     answerType: "NUMBER",
     correctAnswer: "12",
     acceptedAnswers: ["twelve"],
-    options: [],
     points: 15,
     hints: [
       { text: "It strikes the same number as a clock face at noon.", penalty: 3 },
@@ -213,16 +236,18 @@ const sampleTeams = [
   { teamName: "Trail Blazers", teamId: "TEAM-TRAIL" },
 ];
 
-async function seedClues() {
-  const existing = await Clue.countDocuments({});
+async function seedClues(event) {
+  const existing = await Clue.countDocuments({ eventId: event._id });
   if (existing > 0) {
-    console.log(`[seed] ${existing} clue(s) already exist - skipping clue seeding.`);
+    console.log(`[seed] ${existing} clue(s) already exist for event - skipping clue seeding.`);
     return;
   }
+
   for (const data of clueData) {
-    const clue = await Clue.create(data);
+    const clue = await Clue.create({ ...data, eventId: event._id });
     const qrId = await qrService.uniqueQRId();
     await QRCode.create({
+      eventId: event._id,
       qrId,
       clueId: clue._id,
       type: "NORMAL",
@@ -232,18 +257,33 @@ async function seedClues() {
     console.log(`[seed] Clue ${clue.clueNumber} "${clue.title}" + QR ${qrId}`);
   }
 
-  // A couple of bonus/trap QRs around campus for flavour.
+  // Bonus / Trap / Dummy QRs
   const bonusId = await qrService.uniqueQRId();
-  await QRCode.create({ qrId: bonusId, type: "BONUS", points: 10, active: true });
+  await QRCode.create({ eventId: event._id, qrId: bonusId, type: "BONUS", points: 10, active: true });
   console.log(`[seed] Bonus QR ${bonusId} (+10 pts)`);
 
   const trapId = await qrService.uniqueQRId();
-  await QRCode.create({ qrId: trapId, type: "TRAP", points: 5, active: true });
+  await QRCode.create({ eventId: event._id, qrId: trapId, type: "TRAP", points: 5, active: true });
   console.log(`[seed] Trap QR ${trapId} (-5 pts)`);
+
+  const dummyId = await qrService.uniqueQRId();
+  await QRCode.create({ eventId: event._id, qrId: dummyId, type: "DUMMY", active: true });
+  console.log(`[seed] Dummy QR ${dummyId}`);
+
+  // Seed a Side Quest
+  await SideQuest.create({
+    eventId: event._id,
+    title: "The Secret Statue",
+    description: "Find the plaque behind the campus founder statue.",
+    points: 25,
+    answer: "FOUNDER1888",
+    secretCodeReward: "FRAG-X7",
+  });
+  console.log("[seed] Side Quest created.");
 }
 
-async function seedTeams() {
-  const existing = await Team.countDocuments({ role: "player" });
+async function seedTeams(event) {
+  const existing = await Team.countDocuments({ eventId: event._id, role: "player" });
   if (existing > 0) {
     console.log(`[seed] ${existing} team(s) already exist - skipping team seeding.`);
     return;
@@ -252,9 +292,11 @@ async function seedTeams() {
   for (let i = 0; i < sampleTeams.length; i++) {
     const t = sampleTeams[i];
     await Team.create({
+      eventId: event._id,
       teamId: t.teamId,
       teamName: t.teamName,
       passwordHash: "demo1234",
+      plainPassword: "demo1234",
       members: [
         { fullName: `Leader ${i + 1}`, collegeId: `SEED-L${i + 1}` },
         { fullName: `Member ${i + 1}`, collegeId: `SEED-M${i + 1}` },
@@ -267,11 +309,12 @@ async function seedTeams() {
 
 async function run() {
   await connectDB();
-  await seedAdmin();
+  const event = await seedEvent();
+  await seedAdmin(event);
 
   if (!adminOnly) {
-    await seedClues();
-    await seedTeams();
+    await seedClues(event);
+    await seedTeams(event);
   } else {
     console.log("[seed] --admin-only: clues and sample teams skipped.");
   }

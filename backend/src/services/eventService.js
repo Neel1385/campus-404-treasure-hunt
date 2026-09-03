@@ -8,16 +8,22 @@ async function getOrCreateEvent() {
     event = await Event.create({
       name: "CAMPUS 404",
       description: "SCAN. SOLVE. SEARCH. SURVIVE.",
-      status: EVENT_STATUS.NOT_STARTED,
+      status: EVENT_STATUS.RUNNING,
       duration: 60,
     });
   }
   return event;
 }
 
-// Public, player-facing view. Never includes internal admin data.
-async function getPublicEvent() {
-  const event = await getOrCreateEvent();
+async function getEventById(eventId) {
+  if (!eventId) return getOrCreateEvent();
+  const event = await Event.findById(eventId);
+  return event || getOrCreateEvent();
+}
+
+// Public, player-facing view.
+async function getPublicEvent(eventId) {
+  const event = await getEventById(eventId);
   const status = event.effectiveStatus();
   return {
     name: event.name,
@@ -27,16 +33,13 @@ async function getPublicEvent() {
     endTime: event.endTime,
     duration: event.duration,
     remainingMs: event.remainingMs(),
-    leaderboardVisible: event.settings.leaderboardVisible,
-    islandNames: event.settings.islandNames instanceof Map
-      ? Object.fromEntries(event.settings.islandNames)
-      : event.settings.islandNames || {},
+    leaderboardVisible: event.settings ? event.settings.leaderboardVisible : true,
   };
 }
 
 // Full view used by the admin dashboard.
-async function getAdminEvent() {
-  const event = await getOrCreateEvent();
+async function getAdminEvent(eventId) {
+  const event = await getEventById(eventId);
   return {
     ...event.toObject(),
     effectiveStatus: event.effectiveStatus(),
@@ -44,17 +47,11 @@ async function getAdminEvent() {
   };
 }
 
-// Throws unless the event is currently running (ACTIVE).
+// Throws unless the event is currently running (RUNNING or ACTIVE).
 function assertEventActive(event) {
   const status = event.effectiveStatus();
-  if (status !== EVENT_STATUS.ACTIVE) {
-    const label =
-      status === EVENT_STATUS.NOT_STARTED
-        ? "not started yet"
-        : status === EVENT_STATUS.ENDED
-          ? "over"
-          : "paused";
-    const err = new Error(`Event is ${label}.`);
+  if (status !== EVENT_STATUS.ACTIVE && status !== EVENT_STATUS.RUNNING) {
+    const err = new Error(`Event is currently ${status}.`);
     err.status = 409;
     err.code = `EVENT_${status}`;
     throw err;
@@ -62,34 +59,41 @@ function assertEventActive(event) {
 }
 
 // Admin: start / pause / resume / end.
-// Pausing freezes the clock; resuming extends endTime by the paused duration.
-async function setEventStatus(admin, status, note) {
-  const event = await getOrCreateEvent();
+async function setEventStatus(adminOrId, status, eventIdArg, noteArg) {
+  let admin = null;
+  let eventId = null;
+  let note = noteArg;
+
+  if (adminOrId && adminOrId._id) {
+    admin = adminOrId;
+    eventId = eventIdArg;
+  } else {
+    eventId = adminOrId;
+    note = status;
+  }
+
+  const event = await getEventById(eventId);
   const now = new Date();
 
   switch (status) {
+    case EVENT_STATUS.RUNNING:
     case EVENT_STATUS.ACTIVE: {
       if (event.status === EVENT_STATUS.PAUSED && event.pausedAt) {
         const pausedMs = now - event.pausedAt;
         if (event.endTime) event.endTime = new Date(event.endTime.getTime() + pausedMs);
         event.pausedAt = undefined;
-      } else if (event.endTime && now >= event.endTime) {
-        event.startTime = now;
-        event.endTime = new Date(now.getTime() + event.duration * 60 * 1000);
       } else {
         if (!event.startTime) event.startTime = now;
         if (!event.endTime) {
           event.endTime = new Date(now.getTime() + event.duration * 60 * 1000);
         }
       }
-      event.status = EVENT_STATUS.ACTIVE;
+      event.status = EVENT_STATUS.RUNNING;
       break;
     }
     case EVENT_STATUS.PAUSED: {
-      if (event.status === EVENT_STATUS.ACTIVE) {
-        event.status = EVENT_STATUS.PAUSED;
-        event.pausedAt = now;
-      }
+      event.status = EVENT_STATUS.PAUSED;
+      event.pausedAt = now;
       break;
     }
     case EVENT_STATUS.ENDED: {
@@ -97,11 +101,10 @@ async function setEventStatus(admin, status, note) {
       event.pausedAt = undefined;
       break;
     }
+    case EVENT_STATUS.DRAFT:
+    case EVENT_STATUS.READY:
     case EVENT_STATUS.NOT_STARTED: {
-      event.status = EVENT_STATUS.NOT_STARTED;
-      event.startTime = undefined;
-      event.endTime = undefined;
-      event.pausedAt = undefined;
+      event.status = status;
       break;
     }
     default:
@@ -113,93 +116,12 @@ async function setEventStatus(admin, status, note) {
   return event;
 }
 
-// Reset all team progress, scans, submissions and audit logs.
-async function resetEvent(admin) {
-  const { Team, QRScan, Submission, AuditLog, ScoreTransaction } = require("../models");
-  const event = await getOrCreateEvent();
-
-  await Team.updateMany(
-    { role: "player" },
-    {
-      $set: {
-        points: 0,
-        currentClue: 1,
-        currentLevel: 1,
-        completedLevels: [],
-        levelStartedAt: undefined,
-        clueUnlocked: false,
-        solvedClues: [],
-        wrongScans: 0,
-        lockedClue: false,
-        hintsUsed: [],
-        bonusClaimed: [],
-        status: "active",
-        startTime: undefined,
-        endTime: undefined,
-        finalScore: undefined,
-      },
-    }
-  );
-  await QRScan.deleteMany({});
-  await Submission.deleteMany({});
-  await ScoreTransaction.deleteMany({});
-  await AuditLog.deleteMany({});
-
-  await event.updateOne({
-    status: EVENT_STATUS.NOT_STARTED,
-    startTime: undefined,
-    endTime: undefined,
-    pausedAt: undefined,
-  });
-
-  await logAudit(admin, "EVENT_RESET", "Event", String(event._id), undefined, "all progress cleared", "Reset event");
-  return event;
-}
-
-// Update admin settings (event name, penalties, toggles...).
 async function updateEventSettings(admin, patch) {
   const event = await getOrCreateEvent();
-  const allowed = [
-    "name", "description", "duration", "startTime", "endTime", "status",
-    "maxTeamSize", "maxAttemptsPerClue", "wrongScanPenaltyEnabled", "wrongScanPenalty",
-    "maxWrongScans", "lockAfterMaxWrongScans", "wrongAnswerPenaltyEnabled", "wrongAnswerPenalty",
-    "hint1Penalty", "hint2Penalty", "bonusQREnabled", "trapQREnabled", "hintQREnabled",
-    "checkpointQREnabled", "allowNegativeScore", "leaderboardVisible", "pointsPerScan",
-    "correctQRPoints", "clueCompletionPoints", "speedBonusEnabled", "speedBonusMax",
-    "speedBonusT1", "speedBonusP1", "speedBonusT2", "speedBonusP2",
-    "speedBonusT3", "speedBonusP3", "finalChallengePoints", "islandNames",
-  ];
-
-  for (const key of allowed) {
-    if (patch[key] === undefined) continue;
-
-    if (["maxTeamSize", "maxAttemptsPerClue", "maxWrongScans", "duration", "pointsPerScan",
-      "correctQRPoints", "clueCompletionPoints", "speedBonusMax",
-      "speedBonusT1", "speedBonusP1", "speedBonusT2", "speedBonusP2",
-      "speedBonusT3", "speedBonusP3", "finalChallengePoints"].includes(key)) {
-      event.settings[key] = Number(patch[key]);
-    } else if (
-      ["wrongScanPenaltyEnabled", "wrongAnswerPenaltyEnabled", "lockAfterMaxWrongScans", "bonusQREnabled", "trapQREnabled",
-        "hintQREnabled", "checkpointQREnabled", "allowNegativeScore", "leaderboardVisible",
-        "speedBonusEnabled"].includes(key)
-    ) {
-      event.settings[key] = patch[key] === true || patch[key] === "true";
-    } else if (["wrongScanPenalty", "wrongAnswerPenalty", "hint1Penalty", "hint2Penalty"].includes(key)) {
-      event.settings[key] = Number(patch[key]) || 0;
-    } else if (key === "startTime" || key === "endTime") {
-      event[key] = patch[key] ? new Date(patch[key]) : undefined;
-    } else if (key === "name" || key === "description") {
-      event[key] = String(patch[key]);
-    } else if (key === "islandNames") {
-      if (patch.islandNames && typeof patch.islandNames === "object") {
-        for (const [k, v] of Object.entries(patch.islandNames)) {
-          event.settings.islandNames.set(String(k), String(v));
-        }
-      }
-    } else if (key === "status") {
-      event.status = patch[key];
-    }
-  }
+  if (patch.name) event.name = patch.name;
+  if (patch.description) event.description = patch.description;
+  if (patch.theme) event.theme = { ...event.theme, ...patch.theme };
+  if (patch.settings) event.settings = { ...event.settings, ...patch.settings };
 
   await event.save();
   await logAudit(admin, "EVENT_SETTINGS_UPDATED", "Event", String(event._id), undefined, patch, "Settings updated");
@@ -222,10 +144,10 @@ async function logAudit(admin, action, targetType, targetId, oldValue, newValue,
 
 module.exports = {
   getOrCreateEvent,
+  getEventById,
   getPublicEvent,
   getAdminEvent,
   assertEventActive,
   setEventStatus,
-  resetEvent,
   updateEventSettings,
 };

@@ -1,4 +1,4 @@
-const { Team, Clue } = require("../models");
+const { Team, Clue, TeamClueAssignment } = require("../models");
 const { success } = require("../utils/ApiResponse");
 const asyncHandler = require("../utils/asyncHandler");
 const eventService = require("../services/eventService");
@@ -11,7 +11,7 @@ function mergeGameResult(result = {}) {
 }
 
 const scan = asyncHandler(async (req, res) => {
-  const event = await eventService.getOrCreateEvent();
+  const event = await eventService.getEventById(req.team.eventId);
   const result = await gameService.processQRScan(req.team, req.body.qrId, event);
   req.app.emit("game-event");
   return success(res, mergeGameResult(result), result.message);
@@ -19,7 +19,20 @@ const scan = asyncHandler(async (req, res) => {
 
 const currentClue = asyncHandler(async (req, res) => {
   const team = await Team.findById(req.team._id);
-  const clue = await Clue.findOne({ clueNumber: team.currentClue, active: true });
+
+  let clue = null;
+  const assignment = await TeamClueAssignment.findOne({
+    eventId: team.eventId,
+    teamId: team._id,
+    sequenceNumber: team.currentLevel,
+  }).populate("clueId");
+
+  if (assignment && assignment.clueId && assignment.clueId.active) {
+    clue = assignment.clueId;
+  } else {
+    clue = await Clue.findOne({ eventId: team.eventId, clueNumber: team.currentClue, active: true });
+  }
+
   if (!clue) {
     return success(res, { clue: null, currentLevel: team.currentLevel }, "No active clue found");
   }
@@ -30,6 +43,7 @@ const currentClue = asyncHandler(async (req, res) => {
       clueNumber: clue.clueNumber,
       currentLevel: team.currentLevel,
       title: clue.title,
+      checkpointName: clue.checkpointName,
       unlocked: team.clueUnlocked,
       locked: team.lockedClue,
     },
@@ -38,14 +52,14 @@ const currentClue = asyncHandler(async (req, res) => {
 });
 
 const answer = asyncHandler(async (req, res) => {
-  const event = await eventService.getOrCreateEvent();
+  const event = await eventService.getEventById(req.team.eventId);
   const result = await gameService.submitAnswer(req.team, req.body.clueId, req.body.answer, event);
   req.app.emit("game-event");
   return success(res, mergeGameResult(result), result.message);
 });
 
 const hint = asyncHandler(async (req, res) => {
-  const event = await eventService.getOrCreateEvent();
+  const event = await eventService.getEventById(req.team.eventId);
   const result = await gameService.useHint(req.team, req.body.clueId, req.body.hintNumber, event);
   req.app.emit("game-event");
   return success(res, mergeGameResult(result), result.message);
@@ -57,4 +71,16 @@ const scoreHistory = asyncHandler(async (req, res) => {
   return success(res, { history, rank }, "Score history");
 });
 
-module.exports = { scan, currentClue, answer, hint, scoreHistory };
+const myAssignments = asyncHandler(async (req, res) => {
+  const team = await Team.findById(req.team._id);
+  const assignments = await TeamClueAssignment.find({
+    eventId: team.eventId,
+    teamId: team._id,
+  })
+    .populate("clueId", "clueNumber title checkpointName points isFinal")
+    .sort({ sequenceNumber: 1 });
+
+  return success(res, { assignments }, "My clue assignments");
+});
+
+module.exports = { scan, currentClue, answer, hint, scoreHistory, myAssignments };

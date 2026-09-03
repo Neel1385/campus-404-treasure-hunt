@@ -2,6 +2,8 @@ import { useEffect, useState, useCallback } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
+import { useEvent } from "../EventContext.jsx";
+import { cacheTeamSession, getCachedTeamSession, getPendingOperations, removePendingOperation } from "../offlineStorage.js";
 
 function fmtMs(ms) {
   if (ms == null || ms <= 0) return "—";
@@ -26,6 +28,7 @@ const TX_LABELS = {
   WRONG_ANSWER: { label: "Wrong Answer", color: "danger" },
   HINT_PENALTY: { label: "Hint Used", color: "warn" },
   BONUS: { label: "Bonus QR", color: "info" },
+  SIDE_QUEST: { label: "Side Quest Completed", color: "ok" },
   FINAL_CHALLENGE: { label: "Final Treasure", color: "ok" },
   ADMIN_ADJUSTMENT: { label: "Admin Adjustment", color: "info" },
   TRAP: { label: "Wrong QR", color: "danger" },
@@ -33,27 +36,134 @@ const TX_LABELS = {
   ROAD_PONEGLYPH: { label: "Special QR", color: "ok" },
 };
 
+function SideQuestItem({ quest, completed, questAnswers, setQuestAnswers, submitSideQuest, busy }) {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <div
+      className="card"
+      style={{
+        background: "var(--bg-2)",
+        marginBottom: 8,
+        padding: 14,
+        cursor: "pointer",
+        borderLeft: expanded ? "4px solid var(--gold)" : "none",
+        transition: "all 0.2s ease",
+      }}
+      onClick={() => setExpanded(!expanded)}
+    >
+      <div className="spread">
+        <div>
+          <strong style={{ fontSize: 15, color: "var(--gold)" }}>🎯 {quest.title}</strong> —{" "}
+          <span style={{ color: "var(--gold-light)", fontWeight: 600 }}>+{quest.points} pts</span>
+          <div className="muted" style={{ fontSize: 12, marginTop: 2 }}>
+            {expanded ? "▲ Click to collapse question" : "▼ Click to reveal riddle & submit form"}
+          </div>
+        </div>
+        {completed ? (
+          <span className="pill ok">Completed</span>
+        ) : (
+          <span className="pill warn">Unsolved</span>
+        )}
+      </div>
+
+      {expanded && (
+        <div style={{ marginTop: 12, paddingTop: 12, borderTop: "1px solid var(--border)" }} onClick={(e) => e.stopPropagation()}>
+          <p style={{ fontSize: 14, margin: "0 0 12px", color: "var(--text)", lineHeight: 1.5 }}>
+            <strong>Riddle / Question:</strong> {quest.description}
+          </p>
+          {!completed && (
+            <div className="row" style={{ gap: 8 }}>
+              <input
+                placeholder="Type your answer here..."
+                value={questAnswers[quest._id] || ""}
+                onChange={(e) => setQuestAnswers({ ...questAnswers, [quest._id]: e.target.value })}
+                style={{ flex: 1 }}
+              />
+              <button className="btn small ok" onClick={() => submitSideQuest(quest._id)} disabled={busy}>
+                Submit Answer
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const { team, token, logout } = useAuth();
+  const { currentEvent } = useEvent();
   const navigate = useNavigate();
   const [me, setMe] = useState(null);
   const [clue, setClue] = useState(null);
   const [history, setHistory] = useState([]);
+  const [sideQuests, setSideQuests] = useState([]);
+  const [questAnswers, setQuestAnswers] = useState({});
   const [answer, setAnswer] = useState("");
+  const [secretCodeInput, setSecretCodeInput] = useState("");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
 
+  const syncPending = useCallback(async () => {
+    if (!currentEvent?._id || !token || !navigator.onLine) return;
+    try {
+      const ops = await getPendingOperations(currentEvent._id);
+      if (ops && ops.length > 0) {
+        const syncRes = await api.post(`/events/${currentEvent._id}/sync`, { operations: ops }, { token });
+        if (syncRes && syncRes.length > 0) {
+          for (const item of syncRes) {
+            await removePendingOperation(item.operationId);
+          }
+        }
+      }
+    } catch {
+      /* ignore sync errors */
+    }
+  }, [currentEvent?._id, token]);
+
   const load = useCallback(async () => {
-    const [meData, clueData, histData] = await Promise.all([
-      api.get("/teams/me", { token }),
-      api.get("/game/current-clue", { token }),
-      api.get("/game/score-history", { token }),
-    ]);
-    setMe(meData);
-    setClue(clueData);
-    setHistory(histData.history || []);
-  }, [token]);
+    const eventIdParam = currentEvent?._id ? `?eventId=${currentEvent._id}` : "";
+    try {
+      await syncPending();
+
+      const [meData, clueData, histData, questsData, assignData] = await Promise.all([
+        api.get(`/teams/me${eventIdParam}`, { token }),
+        api.get(`/game/current-clue${eventIdParam}`, { token }),
+        api.get(`/game/score-history${eventIdParam}`, { token }),
+        currentEvent?._id ? api.get(`/events/${currentEvent._id}/side-quests`, { token }).catch(() => []) : Promise.resolve([]),
+        api.get(`/game/my-assignments${eventIdParam}`, { token }).catch(() => ({ assignments: [] })),
+      ]);
+
+      setMe(meData);
+      setClue(clueData);
+      setHistory(histData.history || []);
+      setSideQuests(Array.isArray(questsData) ? questsData : []);
+
+      if (currentEvent?._id) {
+        await cacheTeamSession(currentEvent._id, {
+          meData,
+          clueData,
+          histData,
+          questsData: Array.isArray(questsData) ? questsData : [],
+          assignments: assignData.assignments || [],
+        });
+      }
+    } catch (err) {
+      if (!navigator.onLine && currentEvent?._id) {
+        const cached = await getCachedTeamSession(currentEvent._id);
+        if (cached) {
+          setMe(cached.meData);
+          setClue(cached.clueData);
+          setHistory(cached.histData?.history || []);
+          setSideQuests(cached.questsData || []);
+          return;
+        }
+      }
+      throw err;
+    }
+  }, [token, currentEvent, syncPending]);
 
   useEffect(() => {
     load().catch((err) => {
@@ -109,26 +219,85 @@ export default function Dashboard() {
     }
   };
 
+  const submitFinalSecretCode = async (e) => {
+    e.preventDefault();
+    if (!currentEvent?._id || !secretCodeInput) return;
+    setError("");
+    setNotice("");
+    setBusy(true);
+    try {
+      const res = await api.post(`/events/${currentEvent._id}/final-challenge/try-code`, { secretCode: secretCodeInput }, { token });
+      setNotice(res.message);
+      setSecretCodeInput("");
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const submitSideQuest = async (questId) => {
+    if (!currentEvent?._id) return;
+    const ans = questAnswers[questId] || "";
+    setError("");
+    setNotice("");
+    setBusy(true);
+    try {
+      const res = await api.post(`/events/${currentEvent._id}/side-quests/${questId}/complete`, { answer: ans }, { token });
+      setNotice(res.message || "Side quest completed!");
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const teamData = me?.team || team;
   const isComplete = teamData?.status === "completed";
+  const isTimeUp = (me?.event?.remainingMs != null && me.event.remainingMs <= 0) || me?.event?.status === "ENDED" || currentEvent?.status === "ENDED";
   const unlocked = !!clue?.unlocked;
   const currentLevel = teamData?.currentLevel || teamData?.currentClue || 1;
   const totalLevels = me?.totalLevels || me?.totalClues || "?";
   const rank = me?.rank || "?";
+  const fragments = teamData?.collectedSecretFragments || [];
 
   return (
     <div>
-
       <div className="container">
         {error && <div className="alert error">{error}</div>}
         {notice && <div className="alert success">{notice}</div>}
 
-        <div className="spread" style={{ marginBottom: 16 }}>
-          <div>
-            <h2 style={{ margin: 0 }}>🏴‍☠️ {teamData?.teamName}</h2>
-            <span className="muted mono">{teamData?.teamId}</span>
+        {/* Time Is Up Banner / Lockout */}
+        {isTimeUp && (
+          <div
+            className="alert danger animate-fade-in"
+            style={{
+              padding: "24px 20px",
+              textAlign: "center",
+              marginBottom: 24,
+              border: "2px solid var(--danger)",
+              background: "rgba(225, 29, 72, 0.15)",
+              borderRadius: 8,
+            }}
+          >
+            <div style={{ fontSize: 40, marginBottom: 8 }}>⏰</div>
+            <h2 style={{ margin: 0, color: "var(--danger)", textTransform: "uppercase", letterSpacing: "0.05em" }}>
+              TIME IS UP!
+            </h2>
+            <p style={{ margin: "8px 0 0", fontSize: 15, color: "var(--text)" }}>
+              The hunt timer has expired and the event has officially concluded. Game submissions and scans are now locked.
+            </p>
           </div>
-          <div className="stat-grid" style={{ width: "100%", marginTop: 12 }}>
+        )}
+
+        <div className="spread" style={{ marginBottom: 24 }}>
+          <div>
+            <h2 style={{ margin: "0 0 4px" }}>🏴‍☠️ {teamData?.teamName} {currentEvent ? `(${currentEvent.name})` : ""}</h2>
+            <span className="muted mono" style={{ fontSize: 13 }}>{teamData?.teamId}</span>
+          </div>
+          <div className="stat-grid" style={{ width: "100%", marginTop: 16 }}>
             <div className="stat">
               <div className="num" style={{ color: "#f5a623" }}>{teamData?.points ?? 0}</div>
               <div className="lbl">💰 Points</div>
@@ -138,22 +307,34 @@ export default function Dashboard() {
               <div className="lbl">🌊 Current Level</div>
             </div>
             <div className="stat">
-              <div className="num">
-                {isComplete ? "✓" : `${teamData?.solvedClues?.length ?? 0} / ${totalLevels}`}
+              <div className="num" style={{ color: "var(--ok)" }}>
+                {me?.completedCluesCount ?? teamData?.solvedClues?.length ?? 0}
               </div>
-              <div className="lbl">🗿 Clues Completed</div>
+              <div className="lbl">✅ Clues Completed</div>
+            </div>
+            <div className="stat">
+              <div className="num" style={{ color: "var(--warn)" }}>
+                {me?.remainingCluesCount ?? Math.max(0, (me?.totalAssignedClues || totalLevels || 0) - (teamData?.solvedClues?.length || 0))}
+              </div>
+              <div className="lbl">⏳ Clues Remaining</div>
+            </div>
+            <div className="stat">
+              <div className="num">
+                {me?.totalAssignedClues ?? totalLevels ?? 0}
+              </div>
+              <div className="lbl">🎯 Total Assigned Clues</div>
             </div>
             <div className="stat">
               <div className="num">#{rank}</div>
-              <div className="lbl">🏆 Points Earned</div>
+              <div className="lbl">🏆 Points Rank</div>
             </div>
             <div className="stat">
               <div className="num">{teamData?.wrongScans ?? 0}</div>
               <div className="lbl">⚓ Wrong QR Scans</div>
             </div>
             <div className="stat">
-              <div className="num">{teamData?.hintsUsed?.length ?? 0}</div>
-              <div className="lbl">💡 Hints Used</div>
+              <div className="num">{fragments.length}</div>
+              <div className="lbl">🧩 Secret Code Fragments</div>
             </div>
             <div className="stat">
               <div className="num">{fmtMs(me?.event?.remainingMs)}</div>
@@ -162,6 +343,38 @@ export default function Dashboard() {
           </div>
         </div>
 
+        {fragments.length > 0 && currentEvent?.settings?.enableSecretCode !== false && (
+          <div className="card" style={{ marginBottom: 16, background: "var(--bg-2)" }}>
+            <div className="spread">
+              <div>
+                <h3 style={{ margin: 0, color: "var(--gold)" }}>🧩 Collected Secret Code Fragments</h3>
+                <p className="muted" style={{ fontSize: 13, margin: "4px 0 0" }}>Combine these fragments to unlock the physical treasure chest!</p>
+              </div>
+            </div>
+            <div className="row" style={{ gap: 8, marginTop: 12 }}>
+              {fragments.map((frag, idx) => (
+                <span key={idx} className="pill ok mono" style={{ fontSize: 14 }}>
+                  {frag}
+                </span>
+              ))}
+            </div>
+
+            <form onSubmit={submitFinalSecretCode} className="row" style={{ marginTop: 16 }}>
+              <input
+                placeholder="Enter combined secret code..."
+                value={secretCodeInput}
+                onChange={(e) => setSecretCodeInput(e.target.value)}
+                style={{ flex: 1, minWidth: 200 }}
+                disabled={isTimeUp}
+                required
+              />
+              <button className="btn ok" type="submit" disabled={busy || isTimeUp}>
+                🔓 Unlock Physical Chest
+              </button>
+            </form>
+          </div>
+        )}
+
         {isComplete ? (
           <div className="card" style={{ textAlign: "center", padding: 40 }}>
             <div style={{ fontSize: 48 }}>🏴‍☠️</div>
@@ -169,40 +382,37 @@ export default function Dashboard() {
             <p className="muted">
               Final Points: <strong className="mono">{teamData.finalScore}</strong>
             </p>
-            <Link to="/leaderboard" className="btn">
-              View Leaderboard
-            </Link>
           </div>
-        ) : clue && clue.clue ? (
+        ) : clue && (clue.clue || clue.title || clue.checkpointName) ? (
           <div className="card">
             <div className="spread">
-              <span className="pill info">Level {clue.currentLevel || clue.clueNumber} · Clue {clue.clueNumber} of {totalLevels}</span>
+              <span className="pill info">Level {clue.currentLevel || clue.clueNumber} of {totalLevels}</span>
               {unlocked ? (
                 <span className="pill ok">Deciphered — answer it</span>
               ) : clue.locked ? (
                 <span className="pill danger">🔒 Sealed</span>
               ) : (
-                <span className="pill warn">Scan the QR Code to unlock</span>
+                <span className="pill warn">Scan QR Code to unlock</span>
               )}
             </div>
-            <h2 style={{ marginBottom: 4 }}>{clue.clue.title}</h2>
+            <h2 style={{ marginBottom: 4 }}>{clue.clue?.title || clue.title || "Current Destination"}</h2>
             <p className="muted" style={{ marginTop: 0 }}>
-              <span className="mono">{clue.clue.checkpointName}</span> · {clue.clue.points} points ·{" "}
-              {clue.clue.difficulty}
+              📍 Station Checkpoint: <strong className="mono" style={{ color: "var(--gold)" }}>{clue.clue?.checkpointName || clue.checkpointName || "On Campus"}</strong>
             </p>
-            <p>{clue.clue.description}</p>
 
-            {unlocked ? (
+            {unlocked && clue.clue ? (
               <>
+                <p>{clue.clue.description}</p>
                 <form className="row" onSubmit={submitAnswer} style={{ marginTop: 8 }}>
                   <input
                     style={{ flex: 1, minWidth: 200 }}
                     placeholder="Decipher the clue message..."
                     value={answer}
                     onChange={(e) => setAnswer(e.target.value)}
+                    disabled={isTimeUp}
                     required
                   />
-                  <button className="btn" type="submit" disabled={busy}>
+                  <button className="btn" type="submit" disabled={busy || isTimeUp}>
                     Submit
                   </button>
                 </form>
@@ -214,7 +424,7 @@ export default function Dashboard() {
                     </p>
                     <div className="row">
                       {clue.clue.hints.map((h, i) => (
-                        <button key={i} className="btn secondary small" onClick={() => useHint(i + 1)} disabled={busy}>
+                        <button key={i} className="btn secondary small" onClick={() => useHint(i + 1)} disabled={busy || isTimeUp}>
                           Hint {i + 1} (−{h.penalty} points)
                         </button>
                       ))}
@@ -223,16 +433,47 @@ export default function Dashboard() {
                 )}
               </>
             ) : (
-              <p className="muted">
-                Find the QR Code posted at <strong>{clue.clue.checkpointName}</strong> and scan it to unlock this clue.
-              </p>
+              <div style={{ background: "var(--bg-2)", padding: 16, borderRadius: 8, marginTop: 12 }}>
+                <p style={{ margin: "0 0 12px", fontSize: 15, lineHeight: 1.5 }}>
+                  <strong>🧭 LOG POSE DESTINATION:</strong> Navigate to <strong style={{ color: "var(--gold)" }}>{clue.clue?.checkpointName || clue.checkpointName || "the assigned checkpoint"}</strong> on campus and scan the physical QR code posted there to unlock this clue's riddle!
+                </p>
+                <Link to="/scan" className="btn ok small">
+                  📷 Scan QR Code at Checkpoint
+                </Link>
+              </div>
             )}
           </div>
         ) : (
           <div className="card muted">No active levels right now. Set sail when the hunt begins.</div>
         )}
 
-        <div className="card">
+        {currentEvent?.rulesAndRegulations && (
+          <div className="card" style={{ marginBottom: 16, background: "var(--bg-2)" }}>
+            <h3 style={{ color: "var(--gold)", margin: "0 0 8px" }}>📜 Event Rules & Regulations</h3>
+            <p style={{ whiteSpace: "pre-wrap", fontSize: 14, margin: 0, color: "var(--text)" }}>
+              {currentEvent.rulesAndRegulations}
+            </p>
+          </div>
+        )}
+
+        {sideQuests.length > 0 && (
+          <div className="card" style={{ marginTop: 16 }}>
+            <h3>🎯 Event Side Quests</h3>
+            {sideQuests.map((quest) => (
+              <SideQuestItem
+                key={quest._id}
+                quest={quest}
+                completed={teamData?.completedSideQuests?.includes(quest._id)}
+                questAnswers={questAnswers}
+                setQuestAnswers={setQuestAnswers}
+                submitSideQuest={submitSideQuest}
+                busy={busy || isTimeUp}
+              />
+            ))}
+          </div>
+        )}
+
+        <div className="card" style={{ marginTop: 16 }}>
           <h3>Score History</h3>
           {history.length === 0 ? (
             <p className="muted">No score transactions yet, pirate.</p>

@@ -12,14 +12,24 @@ function signToken(team) {
 // POST /api/auth/register
 const register = asyncHandler(async (req, res) => {
   const body = req.body || {};
-  const event = await Event.findOne({});
+  let event = null;
+
+  if (body.eventId) {
+    event = await Event.findById(body.eventId);
+  }
+  if (!event) {
+    event = await Event.findOne({}).sort({ createdAt: -1 });
+  }
+
+  if (!event) {
+    throw new ApiError("No active event found. Organizers must create an event first.", 400, "NO_EVENT");
+  }
 
   validateOrThrow(
     {
       teamName: [required("Team name is required"), minLen(2, "Team name must be at least 2 characters")],
       leaderName: [required("Team leader name is required")],
       leaderCollegeId: [required("Team leader college ID is required")],
-      leaderPhone: [required("Team leader phone number is required")],
       password: [required("Password is required"), minLen(6, "Password must be at least 6 characters")],
       confirmPassword: [required("Please confirm your password")],
     },
@@ -49,22 +59,23 @@ const register = asyncHandler(async (req, res) => {
     throw new ApiError("Every member needs a full name and college ID.", 400, "VALIDATION_ERROR");
   }
 
-  const existing = await Team.findOne({ teamName: String(body.teamName).trim() });
+  const existing = await Team.findOne({ eventId: event._id, teamName: String(body.teamName).trim() });
   if (existing) {
     throw new ApiError("This team name is already taken.", 409, "TEAM_EXISTS");
   }
 
-  // Compact unique team id, e.g. TEAM-A1B2
   let teamId;
   do {
     teamId = `TEAM-${Math.random().toString(36).slice(2, 6).toUpperCase()}${Math.floor(Math.random() * 10)}`;
-  } while (await Team.findOne({ teamId }));
+  } while (await Team.findOne({ eventId: event._id, teamId }));
 
   const team = await Team.create({
+    eventId: event._id,
     teamId,
     teamName: String(body.teamName).trim(),
     members,
     passwordHash: String(body.password),
+    plainPassword: String(body.password),
     role: "player",
   });
 
@@ -82,16 +93,32 @@ const register = asyncHandler(async (req, res) => {
 
 // POST /api/auth/login
 const login = asyncHandler(async (req, res) => {
-  const { identifier, password } = req.body || {};
+  const { identifier, password, eventId } = req.body || {};
   if (!identifier || !password) {
     throw new ApiError("Team ID / Name and password are required.", 400, "VALIDATION_ERROR");
   }
 
   const text = String(identifier).trim();
-  const team = await Team.findOne({
+
+  // Explicitly reject admin accounts attempting to log in via player login endpoint
+  const adminCheck = await Team.findOne({
+    $or: [{ teamId: text.toUpperCase() }, { teamName: text }, { email: text.toLowerCase() }],
+    role: "admin",
+  }).select("+passwordHash");
+
+  if (adminCheck && (await adminCheck.comparePassword(password))) {
+    throw new ApiError("Admin accounts must log in through the Admin Portal (/admin/login).", 403, "ADMIN_LOGIN_DISALLOWED");
+  }
+
+  const query = {
     role: "player",
     $or: [{ teamId: text.toUpperCase() }, { teamName: text }],
-  }).select("+passwordHash");
+  };
+  if (eventId) {
+    query.eventId = eventId;
+  }
+
+  const team = await Team.findOne(query).select("+passwordHash");
 
   if (!team || !(await team.comparePassword(password))) {
     throw new ApiError("Invalid credentials.", 401, "INVALID_CREDENTIALS");
@@ -101,7 +128,17 @@ const login = asyncHandler(async (req, res) => {
     throw new ApiError("Your team has been disabled. Contact an organizer.", 403, "TEAM_DISABLED");
   }
 
-  // Start the clock the first time the team logs in.
+  // Check if clues have been assigned to the team before allowing login
+  const { TeamClueAssignment } = require("../models");
+  const assignedCount = await TeamClueAssignment.countDocuments({
+    eventId: team.eventId,
+    teamId: team._id,
+  });
+
+  if (assignedCount === 0) {
+    throw new ApiError("No clues have been assigned to your team yet. Please wait for the organizer.", 403, "NO_CLUES_ASSIGNED");
+  }
+
   if (!team.startTime) {
     team.startTime = new Date();
     await team.save();

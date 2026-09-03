@@ -37,6 +37,7 @@ router.get("/teams/:id", getTeam);
 router.patch("/teams/:id/status", toggleTeamStatus);
 router.post("/teams/:id/reset", resetTeam);
 router.put("/teams/:id/points", adjustPoints);
+router.put("/teams/:id/password", require("../controllers/adminController").updateTeamPassword);
 router.put("/teams/:id/unlock-clue", unlockClue);
 
 router.get("/clues", listClues);
@@ -47,6 +48,7 @@ router.delete("/clues/:id", deleteClue);
 router.get("/qrcodes", listQRCodes);
 router.post("/qrcodes", createQRCode);
 router.post("/qrcodes/generate", generateQR);
+router.post("/qrcodes/bulk", require("../controllers/adminController").bulkCreateQRCodes);
 router.patch("/qrcodes/:id/toggle", toggleQR);
 
 router.get("/submissions", listSubmissions);
@@ -56,6 +58,7 @@ router.get("/event", eventControl);
 router.put("/event/status", setEventStatus);
 router.put("/event/settings", updateSettings);
 router.post("/event/reset", resetEvent);
+router.delete("/events/:eventId", require("../controllers/adminController").deleteEvent);
 
 router.get("/audit", listAuditLogs);
 

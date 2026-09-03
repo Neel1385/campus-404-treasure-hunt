@@ -2,7 +2,8 @@ const mongoose = require("mongoose");
 
 const qrScanSchema = new mongoose.Schema(
   {
-    teamId: { type: mongoose.Schema.Types.ObjectId, ref: "Team", required: true },
+    eventId: { type: mongoose.Schema.Types.ObjectId, ref: "Event", required: true, index: true },
+    teamId: { type: mongoose.Schema.Types.ObjectId, ref: "Team", required: true, index: true },
     qrId: { type: String, required: true, uppercase: true },
     qrType: { type: String, default: "NORMAL" },
     clueId: { type: mongoose.Schema.Types.ObjectId, ref: "Clue" },
@@ -13,8 +14,6 @@ const qrScanSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-// A team can only process the same QR successfully once (anti duplicate-points).
-// Wrong scans are logged every time so the penalty can escalate.
-qrScanSchema.index({ teamId: 1, qrId: 1 }, { unique: true, partialFilterExpression: { correct: true } });
+qrScanSchema.index({ eventId: 1, teamId: 1, qrId: 1 }, { unique: true, partialFilterExpression: { correct: true } });
 
 module.exports = mongoose.model("QRScan", qrScanSchema);

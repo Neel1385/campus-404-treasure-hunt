@@ -39,13 +39,11 @@ export default function Sidebar() {
 
   const playerNav = [
     { to: "/scan", icon: "📷", label: "Scan QR Code" },
-    { to: "/leaderboard", icon: "🏆", label: "Leaderboard" },
     { to: "/map", icon: "🗺️", label: "Level Map" },
     { to: "/bounty-history", icon: "📜", label: "Score History" },
   ];
 
   const guestNav = [
-    { to: "/leaderboard", icon: "🏆", label: "Leaderboard" },
     { to: "/how-to-play", icon: "📖", label: "How to Play" },
   ];
 
@@ -82,7 +80,7 @@ export default function Sidebar() {
 
         {/* Header */}
         <div className="pirate-sidebar-header">
-          <div className="pirate-sidebar-brand">🏴‍☠️ THE LOST TREASURE</div>
+          <div className="pirate-sidebar-brand">🏴‍☠️ CAMPUS 404</div>
           {isLoggedIn && team && (
             <div className="pirate-sidebar-player">
               <div className="pirate-sidebar-player-name">{team.teamName}</div>
@@ -144,10 +142,16 @@ export default function Sidebar() {
         {/* Bottom section */}
         <div className="pirate-sidebar-bottom">
           {isLoggedIn ? (
-            <button className="pirate-sidebar-link pirate-sidebar-logout" onClick={handleLogout}>
-              <span className="pirate-sidebar-link-icon">🚪</span>
-              <span className="pirate-sidebar-link-label">Logout</span>
-            </button>
+            <>
+              <Link to="/admin/login" className="pirate-sidebar-link" onClick={() => setOpen(false)}>
+                <span className="pirate-sidebar-link-icon">👑</span>
+                <span className="pirate-sidebar-link-label">Organizer / Admin</span>
+              </Link>
+              <button className="pirate-sidebar-link pirate-sidebar-logout" onClick={handleLogout}>
+                <span className="pirate-sidebar-link-icon">🚪</span>
+                <span className="pirate-sidebar-link-label">Logout</span>
+              </button>
+            </>
           ) : (
             <>
               <Link to="/login" className="pirate-sidebar-link" onClick={() => setOpen(false)}>
@@ -157,6 +161,10 @@ export default function Sidebar() {
               <Link to="/register" className="pirate-sidebar-link" onClick={() => setOpen(false)}>
                 <span className="pirate-sidebar-link-icon">🏴‍☠️</span>
                 <span className="pirate-sidebar-link-label">Register Team</span>
+              </Link>
+              <Link to="/admin/login" className="pirate-sidebar-link" onClick={() => setOpen(false)}>
+                <span className="pirate-sidebar-link-icon">👑</span>
+                <span className="pirate-sidebar-link-label">Organizer / Admin</span>
               </Link>
             </>
           )}
