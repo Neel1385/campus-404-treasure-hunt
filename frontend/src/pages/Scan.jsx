@@ -284,7 +284,7 @@ export default function Scan() {
             <>
               <div className="icon">⚓</div>
               <h2 style={{ color: "var(--danger)" }}>WRONG QR CODE!</h2>
-              <p>This QR Code is not for your current level.</p>
+              <p>{result.message || "Wrong QR, follow the clue and try again."}</p>
               <div className="stat-grid" style={{ maxWidth: 320, margin: "12px auto" }}>
                 {result.pointsLost != null && result.pointsLost > 0 && (
                   <div className="stat" style={{ borderColor: "rgba(255,77,109,0.4)" }}>

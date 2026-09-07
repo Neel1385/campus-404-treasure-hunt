@@ -491,7 +491,41 @@ function Overview({ token, run, flash, selectedEventId, setSelectedEventId }) {
                   />
                 </div>
               </div>
-              <h4>Wrong QR Blocking Engine</h4>
+              <h4>⏱️ Event Timer & Duration Controls</h4>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+                <div className="field">
+                  <label>Timer Presets</label>
+                  <select
+                    value={settingsDraft.duration || event.duration || 60}
+                    onChange={(e) => setSettingsDraft({
+                      ...settingsDraft,
+                      duration: Number(e.target.value)
+                    })}
+                  >
+                    <option value={30}>30 Minutes</option>
+                    <option value={45}>45 Minutes</option>
+                    <option value={60}>1 Hour (60 Mins)</option>
+                    <option value={90}>1 Hour 30 Mins (90 Mins)</option>
+                    <option value={120}>2 Hours (120 Mins)</option>
+                    <option value={180}>3 Hours (180 Mins)</option>
+                  </select>
+                </div>
+                <div className="field">
+                  <label>Custom Duration (Minutes)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="1440"
+                    value={settingsDraft.duration || event.duration || 60}
+                    onChange={(e) => setSettingsDraft({
+                      ...settingsDraft,
+                      duration: Number(e.target.value)
+                    })}
+                  />
+                </div>
+              </div>
+
+              <h4>Wrong QR Blocking Engine & Clue Settings</h4>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
                 <div className="field">
                   <label>Clues Per Team (Random Pool Limit)</label>
@@ -1022,10 +1056,28 @@ function Clues({ token, run, flash, eventId }) {
           <button
             className="btn small secondary"
             onClick={() => {
-              const csvContent = "data:text/csv;charset=utf-8," +
-                ["Clue Number,Title,Checkpoint,Points,Answer,Is Final"]
-                  .concat(clues.map((c) => `${c.clueNumber},"${c.title}","${c.checkpointName || ""}",${c.points},"${c.correctAnswer || ""}",${c.isFinal}`))
-                  .join("\n");
+              const escapeCSV = (str) => `"${String(str || "").replace(/"/g, '""')}"`;
+              const rows = [
+                ["Clue Number", "Title", "Description (Riddle)", "Checkpoint", "Points", "Correct Answer", "Accepted Answers", "Hints", "Is Final"]
+              ];
+
+              for (const c of clues) {
+                const accepted = (c.acceptedAnswers || []).join(" | ");
+                const hintTexts = (c.hints || []).map((h) => `${h.text} (-${h.penalty}pts)`).join(" | ");
+                rows.push([
+                  c.clueNumber,
+                  escapeCSV(c.title),
+                  escapeCSV(c.description),
+                  escapeCSV(c.checkpointName),
+                  c.points,
+                  escapeCSV(c.correctAnswer),
+                  escapeCSV(accepted),
+                  escapeCSV(hintTexts),
+                  c.isFinal ? "TRUE" : "FALSE"
+                ]);
+              }
+
+              const csvContent = "data:text/csv;charset=utf-8," + rows.map((e) => e.join(",")).join("\n");
               const encodedUri = encodeURI(csvContent);
               const link = document.createElement("a");
               link.setAttribute("href", encodedUri);
@@ -1035,7 +1087,7 @@ function Clues({ token, run, flash, eventId }) {
               document.body.removeChild(link);
             }}
           >
-            📥 Download All Clues
+            📥 Download All Clues (CSV)
           </button>
           <button className="btn small secondary" onClick={() => setShowBulk(!showBulk)}>
             {showBulk ? "Cancel Bulk" : "⚡ Bulk Upload Clues"}
@@ -1259,29 +1311,27 @@ function QRCodes({ token, run, flash, eventId }) {
             className="btn small secondary"
             onClick={async () => {
               try {
-                flash("Generating QR Images Package...");
-                const data = await run(() => api.get(`/events/${eventId}/qrcodes/zip`, { token }));
-                const list = data.qrcodes || [];
-                if (list.length === 0) return flash("No QR codes to download.");
-
-                // Download individual PNG images or package
-                for (let i = 0; i < list.length; i++) {
-                  const item = list[i];
-                  const a = document.createElement("a");
-                  a.href = item.dataUrl;
-                  a.download = `QR_${item.qrId}_${item.type}_${(item.checkpointName || "Checkpoint").replace(/[^a-zA-Z0-9]/g, "_")}.png`;
-                  document.body.appendChild(a);
-                  a.click();
-                  document.body.removeChild(a);
-                  await new Promise((r) => setTimeout(r, 150));
-                }
-                flash(`Downloaded ${list.length} QR Code PNG Images!`);
+                flash("Downloading QR Images ZIP...");
+                const response = await fetch(`/api/events/${eventId}/qrcodes/zip`, {
+                  headers: { Authorization: `Bearer ${token}` }
+                });
+                if (!response.ok) throw new Error("Failed to generate ZIP archive.");
+                const blob = await response.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `qrcodes_${eventId}.zip`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                window.URL.revokeObjectURL(url);
+                flash("QR Codes ZIP archive downloaded successfully!");
               } catch (err) {
                 flash(`Download Error: ${err.message}`);
               }
             }}
           >
-            🖼️ Download All QR Images (PNG)
+            📦 Download All QR Images (ZIP)
           </button>
         </div>
         <div className="row" style={{ gap: 8 }}>
@@ -1604,6 +1654,7 @@ function Audit({ token, run, eventId }) {
         <div className="row" style={{ gap: 8 }}>
           <select value={actionFilter} onChange={(e) => setActionFilter(e.target.value)}>
             <option value="">All Action Types</option>
+            <option value="QR_SCANNED">📷 Team QR Scans</option>
             <option value="POINTS_MANUAL">Points Manual</option>
             <option value="ADMIN_ADJUST_SCORE">Admin Adjust Score</option>
             <option value="CLUE_CREATED">Clue Created</option>

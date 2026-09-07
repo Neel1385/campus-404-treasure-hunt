@@ -116,10 +116,16 @@ async function setEventStatus(adminOrId, status, eventIdArg, noteArg) {
   return event;
 }
 
-async function updateEventSettings(admin, patch) {
-  const event = await getOrCreateEvent();
+async function updateEventSettings(admin, patch, eventId) {
+  const event = await getEventById(eventId);
   if (patch.name) event.name = patch.name;
   if (patch.description) event.description = patch.description;
+  if (patch.duration && !isNaN(Number(patch.duration))) {
+    event.duration = Number(patch.duration);
+    if (event.startTime) {
+      event.endTime = new Date(event.startTime.getTime() + event.duration * 60 * 1000);
+    }
+  }
   if (patch.theme) event.theme = { ...event.theme, ...patch.theme };
   if (patch.settings) event.settings = { ...event.settings, ...patch.settings };
 

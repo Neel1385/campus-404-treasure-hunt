@@ -343,25 +343,31 @@ export default function Dashboard() {
           </div>
         </div>
 
-        {fragments.length > 0 && currentEvent?.settings?.enableSecretCode !== false && (
-          <div className="card" style={{ marginBottom: 16, background: "var(--bg-2)" }}>
-            <div className="spread">
-              <div>
-                <h3 style={{ margin: 0, color: "var(--gold)" }}>🧩 Collected Secret Code Fragments</h3>
-                <p className="muted" style={{ fontSize: 13, margin: "4px 0 0" }}>Combine these fragments to unlock the physical treasure chest!</p>
-              </div>
+        <div className="card" style={{ marginBottom: 16, background: "var(--bg-2)" }}>
+          <div className="spread">
+            <div>
+              <h3 style={{ margin: 0, color: "var(--gold)" }}>🧩 Treasure Code Pieces</h3>
+              <p className="muted" style={{ fontSize: 13, margin: "4px 0 0" }}>
+                Pieces are unlocked with each correct QR scan. Once complete, submit below or take it to the treasure chest holder!
+              </p>
             </div>
-            <div className="row" style={{ gap: 8, marginTop: 12 }}>
-              {fragments.map((frag, idx) => (
-                <span key={idx} className="pill ok mono" style={{ fontSize: 14 }}>
-                  {frag}
+          </div>
+          <div className="row" style={{ gap: 8, marginTop: 12 }}>
+            {fragments.length > 0 ? (
+              fragments.map((frag, idx) => (
+                <span key={idx} className="pill ok mono" style={{ fontSize: 16, padding: "6px 12px" }}>
+                  QR {idx + 1}: {frag}
                 </span>
-              ))}
-            </div>
+              ))
+            ) : (
+              <span className="muted" style={{ fontSize: 13 }}>No code pieces unlocked yet. Scan your first checkpoint QR!</span>
+            )}
+          </div>
 
+          {fragments.length > 0 && (
             <form onSubmit={submitFinalSecretCode} className="row" style={{ marginTop: 16 }}>
               <input
-                placeholder="Enter combined secret code..."
+                placeholder="Enter complete treasure code..."
                 value={secretCodeInput}
                 onChange={(e) => setSecretCodeInput(e.target.value)}
                 style={{ flex: 1, minWidth: 200 }}
@@ -369,11 +375,11 @@ export default function Dashboard() {
                 required
               />
               <button className="btn ok" type="submit" disabled={busy || isTimeUp}>
-                🔓 Unlock Physical Chest
+                🔓 Unlock Treasure Chest
               </button>
             </form>
-          </div>
-        )}
+          )}
+        </div>
 
         {isComplete ? (
           <div className="card" style={{ textAlign: "center", padding: 40 }}>
@@ -387,59 +393,37 @@ export default function Dashboard() {
           <div className="card">
             <div className="spread">
               <span className="pill info">Level {clue.currentLevel || clue.clueNumber} of {totalLevels}</span>
-              {unlocked ? (
-                <span className="pill ok">Deciphered — answer it</span>
-              ) : clue.locked ? (
-                <span className="pill danger">🔒 Sealed</span>
-              ) : (
-                <span className="pill warn">Scan QR Code to unlock</span>
-              )}
+              <span className="pill ok">🧭 Active Riddle</span>
             </div>
             <h2 style={{ marginBottom: 4 }}>{clue.clue?.title || clue.title || "Current Destination"}</h2>
-            <p className="muted" style={{ marginTop: 0 }}>
-              📍 Station Checkpoint: <strong className="mono" style={{ color: "var(--gold)" }}>{clue.clue?.checkpointName || clue.checkpointName || "On Campus"}</strong>
-            </p>
 
-            {unlocked && clue.clue ? (
-              <>
-                <p>{clue.clue.description}</p>
-                <form className="row" onSubmit={submitAnswer} style={{ marginTop: 8 }}>
-                  <input
-                    style={{ flex: 1, minWidth: 200 }}
-                    placeholder="Decipher the clue message..."
-                    value={answer}
-                    onChange={(e) => setAnswer(e.target.value)}
-                    disabled={isTimeUp}
-                    required
-                  />
-                  <button className="btn" type="submit" disabled={busy || isTimeUp}>
-                    Submit
-                  </button>
-                </form>
-
-                {(clue.clue.hints || []).length > 0 && (
-                  <div style={{ marginTop: 16 }}>
-                    <p className="muted" style={{ marginBottom: 8 }}>
-                      Stuck? Use a hint (costs points):
-                    </p>
-                    <div className="row">
-                      {clue.clue.hints.map((h, i) => (
-                        <button key={i} className="btn secondary small" onClick={() => useHint(i + 1)} disabled={busy || isTimeUp}>
-                          Hint {i + 1} (−{h.penalty} points)
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </>
-            ) : (
-              <div style={{ background: "var(--bg-2)", padding: 16, borderRadius: 8, marginTop: 12 }}>
-                <p style={{ margin: "0 0 12px", fontSize: 15, lineHeight: 1.5 }}>
-                  <strong>🧭 LOG POSE DESTINATION:</strong> Navigate to <strong style={{ color: "var(--gold)" }}>{clue.clue?.checkpointName || clue.checkpointName || "the assigned checkpoint"}</strong> on campus and scan the physical QR code posted there to unlock this clue's riddle!
-                </p>
-                <Link to="/scan" className="btn ok small">
-                  📷 Scan QR Code at Checkpoint
+            <div style={{ background: "var(--bg-2)", padding: 16, borderRadius: 8, marginTop: 12 }}>
+              <h3 style={{ color: "var(--gold)", margin: "0 0 8px" }}>📜 Riddle & Clue:</h3>
+              <p style={{ fontSize: 16, lineHeight: 1.6, margin: "0 0 16px", color: "var(--text)" }}>
+                {clue.clue?.description || clue.description}
+              </p>
+              <div style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }} className="spread">
+                <div>
+                  <span className="muted" style={{ fontSize: 13 }}>Find the right QR code at the checkpoint described above and scan it to earn points & unlock the next riddle!</span>
+                </div>
+                <Link to="/scan" className="btn ok small" style={{ textDecoration: "none" }}>
+                  📷 Scan Checkpoint QR
                 </Link>
+              </div>
+            </div>
+
+            {clue.clue?.hints && clue.clue.hints.length > 0 && (
+              <div style={{ marginTop: 16 }}>
+                <p className="muted" style={{ marginBottom: 8 }}>
+                  Stuck? Use a hint (costs points):
+                </p>
+                <div className="row">
+                  {clue.clue.hints.map((h, i) => (
+                    <button key={i} className="btn secondary small" onClick={() => useHint(i + 1)} disabled={busy || isTimeUp}>
+                      Hint {i + 1} (−{h.penalty} points)
+                    </button>
+                  ))}
+                </div>
               </div>
             )}
           </div>

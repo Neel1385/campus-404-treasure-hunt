@@ -39,13 +39,13 @@ const currentClue = asyncHandler(async (req, res) => {
   return success(
     res,
     {
-      clue: team.clueUnlocked ? clue.toSafeJSON() : null,
+      clue: clue.toSafeJSON(),
       clueNumber: clue.clueNumber,
       currentLevel: team.currentLevel,
       title: clue.title,
       checkpointName: clue.checkpointName,
-      unlocked: team.clueUnlocked,
-      locked: team.lockedClue,
+      unlocked: true,
+      locked: false,
     },
     "Current clue"
   );
