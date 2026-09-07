@@ -40,7 +40,7 @@ const teamSchema = new mongoose.Schema(
     completedSideQuests: { type: [mongoose.Schema.Types.ObjectId], default: [] },
     collectedSecretFragments: { type: [String], default: [] },
     levelStartedAt: { type: Date },
-    clueUnlocked: { type: Boolean, default: false },
+    clueUnlocked: { type: Boolean, default: true },
     solvedClues: { type: [solvedClueSchema], default: [] },
     wrongScans: { type: Number, default: 0 },
     lockedClue: { type: Boolean, default: false },

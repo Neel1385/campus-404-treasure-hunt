@@ -273,8 +273,6 @@ test("answers are normalized before comparison", async () => {
   const { token } = await registerAndLogin("NormAnswer");
   const clue = await Clue.findOne({ clueNumber: 1, eventId: activeEvent._id });
 
-  await request(app).post("/api/game/scan").set(auth(token)).send({ qrId: "AAA111" });
-
   const res = await request(app)
     .post("/api/game/answer")
     .set(auth(token))
@@ -385,4 +383,45 @@ test("leaderboard is computed server-side and ranked by points", async () => {
   const byName = Object.fromEntries(res.body.data.map((t) => [t.teamName, t]));
   assert.ok(byName["Team BoardHigh"].points > byName["Team BoardLow"].points);
   assert.ok(byName["Team BoardHigh"].rank < byName["Team BoardLow"].rank);
+});
+
+// ---------------------------------------------------------------------------
+// Pure QR Scan-to-Solve Flow & Dynamic Treasure Code Tests
+// ---------------------------------------------------------------------------
+
+test("scan-to-solve flow grants points, next clue, treasure fragment and side quest", async () => {
+  const { token } = await registerAndLogin("PureScanFlow");
+
+  // Get current initial clue (First Clue is active by default)
+  const clueRes = await request(app).get("/api/game/current-clue").set(auth(token));
+  assert.equal(clueRes.status, 200);
+  assert.equal(clueRes.body.data.currentLevel, 1);
+
+  // Scan correct QR for Clue 1
+  const scanRes = await request(app).post("/api/game/scan").set(auth(token)).send({ qrId: "AAA111" });
+  assert.equal(scanRes.status, 200);
+  assert.equal(scanRes.body.data.correct, true);
+  assert.ok(scanRes.body.data.treasureFragment);
+  assert.ok(Array.isArray(scanRes.body.data.collectedSecretFragments));
+  assert.equal(scanRes.body.data.currentLevel, 2);
+
+  // Wrong QR scan returns explicit error message and does not advance level
+  const wrongScanRes = await request(app).post("/api/game/scan").set(auth(token)).send({ qrId: "WRONG_FOR_LEVEL2" });
+  assert.equal(wrongScanRes.status, 200);
+  assert.equal(wrongScanRes.body.data.correct, false);
+  assert.match(wrongScanRes.body.message, /Wrong QR, follow the clue and try again/i);
+});
+
+test("side quest wrong answer does not deduct points", async () => {
+  const { token } = await registerAndLogin("SideQuestNoPen");
+  const quest = await SideQuest.findOne({ eventId: activeEvent._id });
+
+  const badRes = await request(app)
+    .post(`/api/events/${activeEvent._id}/side-quests/${quest._id}/complete`)
+    .set(auth(token))
+    .send({ answer: "WRONG_ANSWER_123" });
+
+  assert.equal(badRes.status, 200);
+  assert.equal(badRes.body.data.correct, false);
+  assert.match(badRes.body.data.message, /Wrong answer/i);
 });

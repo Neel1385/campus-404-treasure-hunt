@@ -6,6 +6,19 @@ const scoreService = require("./scoreService");
 const { eventBus, DOMAIN_EVENTS } = require("../events/eventBus");
 const { broadcastLeaderboardUpdate } = require("../socket");
 
+// --- Treasure Code Fragment Helper ---
+function getTreasureCodeChunk(fullCode, stepIndex, totalSteps) {
+  if (!fullCode) return "";
+  const cleanCode = String(fullCode).trim().toUpperCase();
+  const L = cleanCode.length;
+  if (L === 0) return "";
+  const N = Math.max(1, totalSteps);
+  const i = Math.max(0, Math.min(stepIndex, N - 1));
+  const start = Math.floor((i * L) / N);
+  const end = Math.floor(((i + 1) * L) / N);
+  return cleanCode.slice(start, end);
+}
+
 // --- Blocking Check Helper ---
 async function checkTeamBlocked(team) {
   if (team.blocked) {
@@ -217,14 +230,14 @@ async function processQRScan(team, rawQrId, event) {
   const settings = event.settings || {};
 
   if (!qr || !qr.active) {
-    return handleWrongScan(team, qrId, null, null, event, "Wrong checkpoint. Keep searching.");
+    return handleWrongScan(team, qrId, null, null, event, "Wrong QR, follow the clue and try again.");
   }
 
   const clue = qr.clueId ? await Clue.findById(qr.clueId) : null;
 
   if (qr.type === QR_TYPE.DUMMY) {
     eventBus.publish(DOMAIN_EVENTS.WRONG_QR_CODE_SCANNED, { eventId: event._id, teamId: team._id, qrId });
-    return handleWrongScan(team, qrId, qr, null, event, "Dummy QR detected! Nothing useful here.");
+    return handleWrongScan(team, qrId, qr, null, event, "Wrong QR, follow the clue and try again.");
   }
 
   // Handle QR linked directly to a Side Quest
@@ -320,7 +333,7 @@ async function processQRScan(team, rawQrId, event) {
     case QR_TYPE.ROAD_PONEGLYPH:
     default: {
       if (!clue) {
-        return handleWrongScan(team, qrId, qr, null, event, "Wrong checkpoint. Keep searching.");
+        return handleWrongScan(team, qrId, qr, null, event, "Wrong QR, follow the clue and try again.");
       }
 
       const currentAssignment = await TeamClueAssignment.findOne({
@@ -331,28 +344,115 @@ async function processQRScan(team, rawQrId, event) {
 
       if (currentAssignment) {
         if (String(currentAssignment.clueId) !== String(clue._id)) {
-          return handleWrongScan(team, qrId, qr, clue, event, "Wrong checkpoint. This QR is not for your assigned clue sequence.");
+          return handleWrongScan(team, qrId, qr, clue, event, "Wrong QR, follow the clue and try again.");
         }
       } else if (clue.clueNumber !== team.currentClue) {
-        return handleWrongScan(team, qrId, qr, clue, event, "Wrong checkpoint. This QR is not for your current level.");
+        return handleWrongScan(team, qrId, qr, clue, event, "Wrong QR, follow the clue and try again.");
       }
 
       await QRScan.create({ eventId: event._id, teamId: team._id, qrId, qrType: qr.type, clueId: qr.clueId, correct: true, level: team.currentLevel });
 
-      const correctPoints = Number(settings.correctQRPoints) || Number(settings.pointsPerScan) || 0;
-      if (correctPoints > 0) {
+      await AuditLog.create({
+        eventId: event._id,
+        targetType: "Team",
+        targetId: team._id,
+        action: "QR_SCANNED",
+        note: `Team "${team.teamName}" scanned correct QR code ${qrId} for Clue "${clue.title}"`,
+      });
+
+      let pointsEarned = clue.points || Number(settings.correctQRPoints) || 10;
+      if (pointsEarned > 0) {
         const { newPoints } = await scoreService.recordTransaction(
           team._id,
-          SCORE_TRANSACTION_TYPE.CORRECT_QR,
-          correctPoints,
-          { eventId: event._id, reason: "Correct QR scan", qrId, clueId: clue._id, level: team.currentLevel, allowNegative: settings.allowNegativeScore }
+          SCORE_TRANSACTION_TYPE.CLUE_COMPLETED,
+          pointsEarned,
+          { eventId: event._id, reason: `Correct QR scanned for "${clue.title}"`, qrId, clueId: clue._id, level: team.currentLevel, allowNegative: settings.allowNegativeScore }
         );
         team.points = newPoints;
       }
 
+      await Submission.create({
+        eventId: event._id,
+        teamId: team._id,
+        clueId: clue._id,
+        clueNumber: clue.clueNumber,
+        answer: "QR_SCAN_SOLVED",
+        correct: true,
+        pointsAwarded: pointsEarned,
+      });
+
+      team.solvedClues.push({
+        clueNumber: clue.clueNumber,
+        title: clue.title,
+        solvedAt: new Date(),
+        pointsEarned,
+      });
+
+      // Dynamic Treasure Code Piece Distribution across total clues
+      const totalCluesCount = await TeamClueAssignment.countDocuments({ eventId: event._id, teamId: team._id }) || (await Clue.countDocuments({ eventId: event._id, active: true })) || 1;
+      const fullTreasureCode = String(settings.finalSecretCode || "TREASURE").trim().toUpperCase();
+      const currentStepIndex = Math.max(0, team.currentLevel - 1);
+      const codeChunk = getTreasureCodeChunk(fullTreasureCode, currentStepIndex, totalCluesCount);
+
+      if (codeChunk && !team.collectedSecretFragments.includes(codeChunk)) {
+        team.collectedSecretFragments.push(codeChunk);
+      }
+
+      // Assign Side Quest after every successful QR scan
+      const completedQuestIds = team.completedSideQuests || [];
+      const availableSideQuest = await SideQuest.findOne({
+        eventId: event._id,
+        enabled: true,
+        _id: { $nin: completedQuestIds }
+      });
+
+      const nextAssignment = await TeamClueAssignment.findOne({
+        eventId: event._id,
+        teamId: team._id,
+        sequenceNumber: team.currentLevel + 1,
+      }).populate("clueId");
+
+      const nextClueByNumber = await Clue.findOne({ eventId: event._id, clueNumber: team.currentClue + 1, active: true });
+
+      const isFinalStep = clue.isFinal || (nextAssignment ? false : !nextClueByNumber);
+
+      if (isFinalStep) {
+        team.status = TEAM_STATUS.COMPLETED;
+        team.endTime = new Date();
+        team.finalScore = team.points;
+        team.clueUnlocked = true;
+        await team.save();
+
+        broadcastLeaderboardUpdate(event._id);
+        eventBus.publish(DOMAIN_EVENTS.FINAL_CHALLENGE_COMPLETED, { eventId: event._id, teamId: team._id, finalScore: team.finalScore });
+
+        return {
+          success: true,
+          correct: true,
+          missionComplete: true,
+          message: `RIGHT QR! You arrived at "${clue.checkpointName || clue.title}"! MISSION COMPLETE!`,
+          pointsEarned,
+          totalPoints: team.points,
+          completionTime: team.endTime,
+          clue: clue.toSafeJSON(),
+          treasureFragment: codeChunk,
+          collectedSecretFragments: team.collectedSecretFragments,
+          sideQuest: availableSideQuest ? {
+            id: availableSideQuest._id,
+            title: availableSideQuest.title,
+            description: availableSideQuest.description,
+            points: availableSideQuest.points,
+            secretCodeReward: availableSideQuest.secretCodeReward,
+          } : null,
+        };
+      }
+
+      team.currentLevel += 1;
+      team.currentClue = team.currentLevel;
       team.clueUnlocked = true;
-      team.levelStartedAt = new Date();
-      await Team.updateOne({ _id: team._id }, { $set: { clueUnlocked: true, levelStartedAt: team.levelStartedAt } });
+      await team.save();
+
+      const nextClueObj = nextAssignment?.clueId || nextClueByNumber;
 
       broadcastLeaderboardUpdate(event._id);
       eventBus.publish(DOMAIN_EVENTS.QR_CODE_SCANNED, { eventId: event._id, teamId: team._id, qrId, clueId: clue._id });
@@ -360,11 +460,21 @@ async function processQRScan(team, rawQrId, event) {
       return {
         success: true,
         correct: true,
-        message: "Correct checkpoint unlocked!",
-        pointsEarned: correctPoints,
+        message: `RIGHT QR! You arrived at "${clue.checkpointName || clue.title}"! +${pointsEarned} pts. Next riddle revealed!`,
+        pointsEarned,
         totalPoints: team.points,
         currentLevel: team.currentLevel,
         clue: clue.toSafeJSON(),
+        nextClue: nextClueObj ? nextClueObj.toSafeJSON() : null,
+        treasureFragment: codeChunk,
+        collectedSecretFragments: team.collectedSecretFragments,
+        sideQuest: availableSideQuest ? {
+          id: availableSideQuest._id,
+          title: availableSideQuest.title,
+          description: availableSideQuest.description,
+          points: availableSideQuest.points,
+          secretCodeReward: availableSideQuest.secretCodeReward,
+        } : null,
       };
     }
   }
@@ -385,6 +495,14 @@ async function handleWrongScan(team, qrId, qr, clue, event, message) {
     clueId: qr ? qr.clueId : undefined,
     correct: false,
     penalty: 0,
+  });
+
+  await AuditLog.create({
+    eventId: event._id,
+    targetType: "Team",
+    targetId: team._id,
+    action: "QR_SCANNED",
+    note: `Team "${team.teamName}" scanned wrong QR code ${qrId}: ${message}`,
   });
 
   const previousScore = team.points;
@@ -698,12 +816,17 @@ async function completeSideQuest(eventId, team, questId, answer) {
   }
 
   if (quest.answer && normalizeAnswer("TEXT", answer) !== normalizeAnswer("TEXT", quest.answer)) {
-    return { success: false, message: "Incorrect side quest answer." };
+    return {
+      success: false,
+      correct: false,
+      message: "Wrong answer. No points awarded, but no penalty deducted. Try again or skip!",
+      totalPoints: team.points
+    };
   }
 
   team.completedSideQuests.push(quest._id);
 
-  if (quest.secretCodeReward) {
+  if (quest.secretCodeReward && !team.collectedSecretFragments.includes(quest.secretCodeReward)) {
     team.collectedSecretFragments.push(quest.secretCodeReward);
   }
 
@@ -723,8 +846,10 @@ async function completeSideQuest(eventId, team, questId, answer) {
 
   return {
     success: true,
-    message: `Side Quest completed! +${quest.points} points`,
+    correct: true,
+    message: `Side Quest completed! +${quest.points} extra points!`,
     rewardCode: quest.secretCodeReward,
+    pointsEarned: quest.points,
     totalPoints: team.points,
   };
 }

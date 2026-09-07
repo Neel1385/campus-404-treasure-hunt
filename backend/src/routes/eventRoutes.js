@@ -265,23 +265,22 @@ router.get("/:eventId/leaderboard", protect, enforceEventIsolation, async (req, 
 router.get("/:eventId/qrcodes/zip", protect, adminOnly, enforceEventIsolation, async (req, res, next) => {
   try {
     const qrcode = require("qrcode");
+    const JSZip = require("jszip");
     const qrs = await QRCode.find({ eventId: req.params.eventId }).populate("clueId", "clueNumber title");
 
-    res.setHeader("Content-Type", "application/json");
-    const qrDataList = [];
-
+    const zip = new JSZip();
     for (const qr of qrs) {
       const url = qrService.qrUrl(qr.qrId);
       const dataDataUrl = await qrcode.toDataURL(url, { errorCorrectionLevel: "H", margin: 2, width: 300 });
-      qrDataList.push({
-        qrId: qr.qrId,
-        type: qr.type,
-        checkpointName: qr.checkpointName || (qr.clueId ? qr.clueId.title : ""),
-        dataUrl: dataDataUrl,
-      });
+      const base64Data = dataDataUrl.replace(/^data:image\/png;base64,/, "");
+      const cleanName = (qr.checkpointName || (qr.clueId ? qr.clueId.title : "QR")).replace(/[^a-zA-Z0-9_-]/g, "_");
+      zip.file(`QR_${qr.qrId}_${qr.type}_${cleanName}.png`, base64Data, { base64: true });
     }
 
-    res.json({ success: true, data: { qrcodes: qrDataList } });
+    const zipBuffer = await zip.generateAsync({ type: "nodebuffer" });
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", `attachment; filename="qrcodes_${req.params.eventId}.zip"`);
+    res.send(zipBuffer);
   } catch (err) {
     next(err);
   }
