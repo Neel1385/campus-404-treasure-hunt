@@ -62,7 +62,7 @@ async function start() {
   const { getOrCreateEvent } = require("./services/eventService");
   await getOrCreateEvent();
 
-  server.listen(port, () => {
+  server.listen(port,"0.0.0.0", () => {
     console.log(`[server] CAMPUS 404 API listening on http://localhost:${port}`);
   });
 }
