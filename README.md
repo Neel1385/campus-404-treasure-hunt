@@ -1,4 +1,4 @@
-# CAMPUS 404 — QR Treasure Hunt
+# CAMPUS 404 — QR Treasure Hunt 
 
 A mobile-first campus treasure hunt web app. Teams register, scan physical QR codes,
 solve clues in order, and race the clock for points on a live leaderboard.
