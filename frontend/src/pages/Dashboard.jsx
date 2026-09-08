@@ -380,11 +380,25 @@ export default function Dashboard() {
           </div>
           <div className="row" style={{ gap: 8, marginTop: 12 }}>
             {fragments.length > 0 ? (
-              fragments.map((frag, idx) => (
-                <span key={idx} className="pill ok mono" style={{ fontSize: 16, padding: "6px 12px" }}>
-                  QR {idx + 1}: {frag}
-                </span>
-              ))
+              (() => {
+                // Jumble fragments deterministically based on team ID so order is randomized
+                const seedStr = teamData?.teamId || "JUMBLE";
+                let hash = 0;
+                for (let i = 0; i < seedStr.length; i++) hash = (hash << 5) - hash + seedStr.charCodeAt(i);
+
+                const jumbled = fragments.map((frag, idx) => ({ frag, idx }))
+                  .sort((a, b) => {
+                    const valA = (a.idx * 31 + Math.abs(hash)) % 17;
+                    const valB = (b.idx * 31 + Math.abs(hash)) % 17;
+                    return valA - valB;
+                  });
+
+                return jumbled.map((item, displayIdx) => (
+                  <span key={displayIdx} className="pill ok mono" style={{ fontSize: 16, padding: "6px 12px" }}>
+                    Piece #{displayIdx + 1}: {item.frag}
+                  </span>
+                ));
+              })()
             ) : (
               <span className="muted" style={{ fontSize: 13 }}>No code pieces unlocked yet. Scan your first checkpoint QR!</span>
             )}
@@ -415,25 +429,21 @@ export default function Dashboard() {
               Final Points: <strong className="mono">{teamData.finalScore}</strong>
             </p>
           </div>
-        ) : clue && (clue.clue || clue.title || clue.checkpointName) ? (
+        ) : clue && (clue.clue || clue.description) ? (
           <div className="card">
             <div className="spread">
               <span className="pill info">Level {clue.currentLevel || clue.clueNumber} of {totalLevels}</span>
               <span className="pill ok">🧭 Active Riddle</span>
             </div>
-            <h2 style={{ marginBottom: 4 }}>{clue.clue?.title || clue.title || "Current Destination"}</h2>
 
-            <div style={{ background: "var(--bg-2)", padding: 16, borderRadius: 8, marginTop: 12 }}>
-              <h3 style={{ color: "var(--gold)", margin: "0 0 8px" }}>📜 Riddle & Clue:</h3>
-              <p style={{ fontSize: 16, lineHeight: 1.6, margin: "0 0 16px", color: "var(--text)" }}>
+            <div style={{ background: "var(--bg-2)", padding: 20, borderRadius: 8, marginTop: 16 }}>
+              <p style={{ fontSize: 18, lineHeight: 1.7, margin: "0 0 16px", color: "var(--text)", fontWeight: 500 }}>
                 {clue.clue?.description || clue.description}
               </p>
               <div style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }} className="spread">
-                <div>
-                  <span className="muted" style={{ fontSize: 13 }}>Find the right QR code at the checkpoint described above and scan it to earn points & unlock the next riddle!</span>
-                </div>
+                <span className="muted" style={{ fontSize: 13 }}>Scan the matching QR code at the location described to continue.</span>
                 <Link to="/scan" className="btn ok small" style={{ textDecoration: "none" }}>
-                  📷 Scan Checkpoint QR
+                  📷 Open Camera Scanner
                 </Link>
               </div>
             </div>
@@ -484,32 +494,40 @@ export default function Dashboard() {
         )}
 
         <div className="card" style={{ marginTop: 16 }}>
-          <h3>Score History</h3>
+          <h3 style={{ color: "var(--gold)", margin: "0 0 12px" }}>📜 Detailed Score History</h3>
           {history.length === 0 ? (
             <p className="muted">No score transactions yet, pirate.</p>
           ) : (
-            <table className="board">
+            <table className="board" style={{ width: "100%" }}>
               <thead>
                 <tr>
                   <th>Level</th>
-                  <th>Action</th>
-                  <th>Points</th>
-                  <th>When</th>
+                  <th>Action Type</th>
+                  <th>Description / Reason</th>
+                  <th>Points Delta</th>
+                  <th>Timestamp</th>
                 </tr>
               </thead>
               <tbody>
-                {history.slice(0, 30).map((h, i) => {
-                  const info = TX_LABELS[h.kind] || { label: h.kind, color: "info" };
+                {history.slice(0, 50).map((h, i) => {
+                  const typeKey = h.type || h.kind || "CHECKPOINT";
+                  const info = TX_LABELS[typeKey] || { label: typeKey, color: "info" };
+                  const pts = h.amount != null ? h.amount : h.points != null ? h.points : 0;
+                  const dateVal = h.createdAt || h.at;
+
                   return (
                     <tr key={i}>
                       <td className="muted mono">{h.level || "—"}</td>
                       <td>
                         <span className={`pill ${info.color}`}>{info.label}</span>
                       </td>
-                      <td className="mono" style={{ color: h.points >= 0 ? "#f5a623" : "var(--danger)" }}>
-                        {h.points > 0 ? `+${h.points}` : h.points}
+                      <td style={{ fontSize: 13, color: "var(--text)" }}>
+                        {h.reason || h.note || "Point adjustment"}
                       </td>
-                      <td className="muted" style={{ fontSize: 12 }}>{fmtDate(h.at)}</td>
+                      <td className="mono" style={{ fontSize: 14, fontWeight: 700, color: pts >= 0 ? "var(--gold)" : "var(--danger)" }}>
+                        {pts > 0 ? `+${pts}` : pts}
+                      </td>
+                      <td className="muted" style={{ fontSize: 12 }}>{fmtDate(dateVal)}</td>
                     </tr>
                   );
                 })}

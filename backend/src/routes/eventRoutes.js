@@ -21,10 +21,37 @@ router.get("/", async (req, res, next) => {
 router.get("/:eventId/clue-assignments", protect, adminOnly, enforceEventIsolation, async (req, res, next) => {
   try {
     const assignments = await TeamClueAssignment.find({ eventId: req.params.eventId })
-      .populate("teamId", "teamId teamName")
-      .populate("clueId", "clueNumber title checkpointName points")
+      .populate("teamId", "teamId teamName currentLevel currentClue solvedClues status")
+      .populate("clueId", "clueNumber title description checkpointName points isFinal")
       .sort({ sequenceNumber: 1 });
-    res.json({ success: true, data: assignments });
+
+    const quests = await SideQuest.find({ eventId: req.params.eventId });
+
+    const enriched = assignments.map((a) => {
+      const obj = a.toObject();
+      const teamLevel = a.teamId?.currentLevel || a.teamId?.currentClue || 1;
+      const isCompleted = a.sequenceNumber < teamLevel;
+      const isCurrent = a.sequenceNumber === teamLevel;
+
+      const questIndex = (a.sequenceNumber - 1) % (quests.length || 1);
+      const assignedQuest = quests.length > 0 ? quests[questIndex] : null;
+
+      return {
+        ...obj,
+        isCompletedStep: isCompleted,
+        isCurrentStep: isCurrent,
+        sideQuest: assignedQuest ? {
+          _id: assignedQuest._id,
+          title: assignedQuest.title,
+          description: assignedQuest.description,
+          points: assignedQuest.points,
+          answer: assignedQuest.answer,
+          secretCodeReward: assignedQuest.secretCodeReward,
+        } : null,
+      };
+    });
+
+    res.json({ success: true, data: enriched });
   } catch (err) {
     next(err);
   }
