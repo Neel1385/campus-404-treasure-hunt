@@ -80,7 +80,7 @@ export default function Sidebar() {
 
         {/* Header */}
         <div className="pirate-sidebar-header">
-          <div className="pirate-sidebar-brand">🏴‍☠️ CAMPUS 404</div>
+          <div className="pirate-sidebar-brand">🏴‍☠️ The Lost Treasure</div>
           {isLoggedIn && team && (
             <div className="pirate-sidebar-player">
               <div className="pirate-sidebar-player-name">{team.teamName}</div>

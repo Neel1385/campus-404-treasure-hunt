@@ -30,8 +30,9 @@ router.get("/:eventId/clue-assignments", protect, adminOnly, enforceEventIsolati
     const enriched = assignments.map((a) => {
       const obj = a.toObject();
       const teamLevel = a.teamId?.currentLevel || a.teamId?.currentClue || 1;
-      const isCompleted = a.sequenceNumber < teamLevel;
-      const isCurrent = a.sequenceNumber === teamLevel;
+      const isTeamCompleted = a.teamId?.status === "COMPLETED";
+      const isCompleted = isTeamCompleted || a.sequenceNumber < teamLevel;
+      const isCurrent = !isTeamCompleted && a.sequenceNumber === teamLevel;
 
       const questIndex = (a.sequenceNumber - 1) % (quests.length || 1);
       const assignedQuest = quests.length > 0 ? quests[questIndex] : null;

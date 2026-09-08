@@ -37,6 +37,11 @@ export default function GrandLineMap() {
   const solvedClues = teamData?.solvedClues || [];
 
   const totalSteps = assignments.length > 0 ? assignments.length : (me?.totalLevels || me?.totalClues || 0);
+  const isTeamDone = teamData?.status === "COMPLETED" || teamData?.status === "completed";
+  const completedCount = isTeamDone
+    ? totalSteps
+    : Math.min(totalSteps, Math.max(solvedClues.length, completedLevels.length, Math.max(0, currentLevel - 1)));
+  const progressPct = totalSteps > 0 ? Math.min(100, Math.round((completedCount / totalSteps) * 100)) : 0;
 
   return (
     <div>
@@ -60,7 +65,7 @@ export default function GrandLineMap() {
                 Voyage Progress
               </span>
               <span className="mono" style={{ color: "var(--gold)", fontSize: 14 }}>
-                {completedLevels.length} / {totalSteps} Islands Conquered
+                {completedCount} / {totalSteps} Islands Conquered ({progressPct}%)
               </span>
             </div>
             <div style={{ background: "rgba(13,15,20,0.6)", borderRadius: 999, height: 10, border: "1px solid rgba(212,168,67,0.2)" }}>
@@ -69,7 +74,7 @@ export default function GrandLineMap() {
                   background: "linear-gradient(90deg, #10b981, #f59e0b)",
                   borderRadius: 999,
                   height: "100%",
-                  width: `${totalSteps > 0 ? (completedLevels.length / totalSteps) * 100 : 0}%`,
+                  width: `${progressPct}%`,
                   transition: "width 0.5s ease",
                 }}
               />
@@ -103,9 +108,9 @@ export default function GrandLineMap() {
               assignments.length > 0 ? (
                 assignments.map((item) => {
                   const level = item.sequenceNumber;
-                  const isCompleted = completedLevels.includes(level);
-                  const isCurrent = level === currentLevel && teamData?.status !== "completed";
-                  const isLocked = level > currentLevel;
+                const isCompleted = isTeamDone || completedLevels.includes(level) || level < currentLevel;
+                const isCurrent = !isTeamDone && level === currentLevel;
+                const isLocked = !isTeamDone && level > currentLevel;
                   const clueObj = item.clueId || {};
                   const solved = solvedClues.find((s) => s.clueNumber === clueObj.clueNumber || s.clueNumber === level);
 

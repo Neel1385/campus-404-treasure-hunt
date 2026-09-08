@@ -58,6 +58,17 @@ export default function Scan() {
       if (currentEvent?._id) payload.eventId = currentEvent._id;
       const data = await api.post("/game/scan", payload, { token });
       setResult(data);
+
+      // Refresh team data
+      const param = currentEvent?._id ? `?eventId=${currentEvent._id}` : "";
+      api.get(`/teams/me${param}`, { token }).then((d) => setTeamData(d.team)).catch(() => {});
+
+      // Auto-close scanning popup / modal and navigate back to dashboard after 2.5 seconds on successful scan
+      if (data && data.success && data.correct) {
+        setTimeout(() => {
+          navigate("/dashboard");
+        }, 2500);
+      }
     } catch (err) {
       if (err.status === 401) {
         logout();

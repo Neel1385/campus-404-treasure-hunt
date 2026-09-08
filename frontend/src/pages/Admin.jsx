@@ -96,7 +96,7 @@ export default function Admin() {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
           {sidebarOpen ? (
             <Link to="/" style={{ textDecoration: "none", color: "var(--gold, #f59e0b)", fontWeight: 700, fontSize: 16 }}>
-              🏴‍☠️ CAMPUS 404
+              🏴‍☠️ The Lost Treasure
             </Link>
           ) : (
             <span style={{ fontSize: 20 }}>🏴‍☠️</span>
@@ -438,7 +438,7 @@ function Overview({ token, run, flash, selectedEventId, setSelectedEventId }) {
               <label>Event Name *</label>
               <input
                 type="text"
-                placeholder="e.g. CAMPUS 404 - Winter Quest"
+                placeholder="e.g. The Lost Treasure - Winter Quest"
                 value={newEventName}
                 onChange={(e) => setNewEventName(e.target.value)}
                 required
@@ -705,12 +705,26 @@ function Overview({ token, run, flash, selectedEventId, setSelectedEventId }) {
 function LeaderboardTab({ token, run, eventId }) {
   const [leaderboard, setLeaderboard] = useState([]);
   const [now, setNow] = useState(Date.now());
+  const [firstWinnerAlert, setFirstWinnerAlert] = useState(null);
 
   const load = useCallback(async () => {
     if (!eventId) return;
     try {
       const res = await run(() => api.get(`/events/${eventId}/leaderboard`, { token }));
-      setLeaderboard(Array.isArray(res) ? res : res?.data || []);
+      const list = Array.isArray(res) ? res : res?.data || [];
+      setLeaderboard(list);
+
+      const fw = list.find((t) => t.isFirstWinner) || (list[0]?.firstWinnerInfo?.firstWinnerTeamName ? list[0].firstWinnerInfo : null);
+      if (fw) {
+        const winnerName = fw.teamName || fw.firstWinnerTeamName;
+        const winnerTime = fw.treasureCodeSolvedAt || fw.firstWinnerTimestamp;
+        if (winnerName) {
+          setFirstWinnerAlert({
+            teamName: winnerName,
+            timestamp: winnerTime ? new Date(winnerTime).toLocaleString() : "Just now",
+          });
+        }
+      }
     } catch {
       setLeaderboard([]);
     }
@@ -761,6 +775,34 @@ function LeaderboardTab({ token, run, eventId }) {
         </button>
       </div>
 
+      {firstWinnerAlert && (
+        <div
+          className="card alert ok animate-fade-in"
+          style={{
+            marginBottom: 20,
+            padding: "16px 20px",
+            background: "rgba(16, 185, 129, 0.15)",
+            border: "2px solid var(--ok)",
+            borderRadius: 8,
+          }}
+        >
+          <div className="spread">
+            <div className="row" style={{ gap: 12 }}>
+              <span style={{ fontSize: 32 }}>🏆</span>
+              <div>
+                <h3 style={{ margin: 0, color: "var(--gold)" }}>
+                  FIRST WINNER DECLARED: {firstWinnerAlert.teamName}
+                </h3>
+                <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--text)" }}>
+                  Correctly guessed the Treasure Code Pieces first at <strong>{firstWinnerAlert.timestamp}</strong>!
+                </p>
+              </div>
+            </div>
+            <button className="btn small ghost" onClick={() => setFirstWinnerAlert(null)}>Dismiss</button>
+          </div>
+        </div>
+      )}
+
       <table className="board" style={{ width: "100%" }}>
         <thead>
           <tr>
@@ -800,8 +842,20 @@ function LeaderboardTab({ token, run, eventId }) {
                     #{t.rank}
                   </td>
                   <td>
-                    <strong>{t.teamName}</strong>
+                    <div className="row" style={{ gap: 6 }}>
+                      <strong>{t.teamName}</strong>
+                      {t.isFirstWinner && (
+                        <span className="pill ok" style={{ fontSize: 10, padding: "2px 6px", background: "linear-gradient(135deg, #f59e0b, #d97706)", color: "#fff", fontWeight: 700 }}>
+                          🏆 First Winner
+                        </span>
+                      )}
+                    </div>
                     <div className="muted mono" style={{ fontSize: 12 }}>{t.teamId}</div>
+                    {t.treasureCodeSolvedAt && (
+                      <div className="muted mono" style={{ fontSize: 11, color: "var(--gold-light)", marginTop: 2 }}>
+                        🔑 Solved Code: {new Date(t.treasureCodeSolvedAt).toLocaleTimeString()}
+                      </div>
+                    )}
                   </td>
                   <td className="mono" style={{ fontSize: 16, fontWeight: 700, color: "var(--gold)" }}>
                     {t.points} pts

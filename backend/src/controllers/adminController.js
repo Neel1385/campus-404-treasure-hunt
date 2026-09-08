@@ -444,7 +444,7 @@ const updateSettings = asyncHandler(async (req, res) => {
 
 const createEvent = asyncHandler(async (req, res) => {
   const body = req.body || {};
-  const name = String(body.name || "CAMPUS 404").trim();
+  const name = String(body.name || "The Lost Treasure").trim();
   const description = String(body.description || "SCAN. SOLVE. SEARCH. SURVIVE.").trim();
   const duration = Number(body.duration) || 60; // minutes
   const rulesAndRegulations = body.rulesAndRegulations || undefined;

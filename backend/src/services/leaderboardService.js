@@ -7,8 +7,21 @@ async function getLeaderboard(eventId) {
     query.eventId = eventId;
   }
 
+  const { Event } = require("../models");
+  let firstWinnerInfo = null;
+  if (eventId) {
+    const ev = await Event.findById(eventId).select("firstWinnerTeamId firstWinnerTeamName firstWinnerTimestamp").lean();
+    if (ev && ev.firstWinnerTeamId) {
+      firstWinnerInfo = {
+        firstWinnerTeamId: ev.firstWinnerTeamId,
+        firstWinnerTeamName: ev.firstWinnerTeamName,
+        firstWinnerTimestamp: ev.firstWinnerTimestamp,
+      };
+    }
+  }
+
   const teams = await Team.find(query)
-    .select("teamName teamId points currentLevel currentClue solvedClues completedLevels status startTime endTime createdAt finalScore wrongScans blocked blockedUntil blockReason")
+    .select("teamName teamId points currentLevel currentClue solvedClues completedLevels status startTime endTime createdAt finalScore wrongScans blocked blockedUntil blockReason treasureCodeSolvedAt isFirstWinner")
     .lean();
 
   const sorted = teams.sort((a, b) => {
@@ -57,6 +70,9 @@ async function getLeaderboard(eventId) {
       blocked: team.blocked || false,
       blockedUntil: team.blockedUntil,
       blockReason: team.blockReason || "",
+      treasureCodeSolvedAt: team.treasureCodeSolvedAt || null,
+      isFirstWinner: !!team.isFirstWinner || (firstWinnerInfo && String(firstWinnerInfo.firstWinnerTeamId) === String(team._id)),
+      firstWinnerInfo,
     };
   });
 }

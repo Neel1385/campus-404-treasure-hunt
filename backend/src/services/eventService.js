@@ -6,7 +6,7 @@ async function getOrCreateEvent() {
   let event = await Event.findOne({}).sort({ createdAt: -1 });
   if (!event) {
     event = await Event.create({
-      name: "CAMPUS 404",
+      name: "The Lost Treasure",
       description: "SCAN. SOLVE. SEARCH. SURVIVE.",
       status: EVENT_STATUS.RUNNING,
       duration: 60,
