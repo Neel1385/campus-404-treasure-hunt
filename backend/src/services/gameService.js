@@ -350,6 +350,9 @@ async function processQRScan(team, rawQrId, event) {
         return handleWrongScan(team, qrId, qr, clue, event, "Wrong QR, follow the clue and try again.");
       }
 
+      // Reset consecutive wrong scans on correct QR scan
+      team.consecutiveWrongScans = 0;
+
       await QRScan.create({ eventId: event._id, teamId: team._id, qrId, qrType: qr.type, clueId: qr.clueId, correct: true, level: team.currentLevel });
 
       await AuditLog.create({
@@ -521,15 +524,17 @@ async function handleWrongScan(team, qrId, qr, clue, event, message) {
   }
 
   const newWrongScans = (team.wrongScans || 0) + 1;
+  const newConsecutive = (team.consecutiveWrongScans || 0) + 1;
   team.wrongScans = newWrongScans;
+  team.consecutiveWrongScans = newConsecutive;
 
   if (settings.wrongScanBlockingEnabled) {
     const threshold = Number(settings.wrongScanBlockThreshold) || 3;
-    if (newWrongScans >= threshold) {
+    if (newConsecutive >= threshold) {
       team.blocked = true;
-      team.blockReason = `Blocked due to ${newWrongScans} wrong QR scans.`;
+      const durationMins = Number(settings.wrongScanBlockDuration) || 5;
+      team.blockReason = `Blocked due to ${newConsecutive} consecutive wrong QR scans for ${durationMins} minutes.`;
       if (settings.wrongScanBlockStrategy === "TIME" || settings.wrongScanBlockStrategy === "BOTH") {
-        const durationMins = Number(settings.wrongScanBlockDuration) || 5;
         team.blockedUntil = new Date(Date.now() + durationMins * 60 * 1000);
       }
       if (settings.wrongScanBlockStrategy === "SCAN_COUNT" || settings.wrongScanBlockStrategy === "BOTH") {

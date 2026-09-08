@@ -292,6 +292,32 @@ export default function Dashboard() {
           </div>
         )}
 
+        {/* Team Blocked Banner */}
+        {teamData?.blocked && (
+          <div
+            className="alert danger animate-fade-in"
+            style={{
+              padding: "20px",
+              textAlign: "center",
+              marginBottom: 24,
+              border: "2px solid var(--danger)",
+              background: "rgba(225, 29, 72, 0.2)",
+              borderRadius: 8,
+            }}
+          >
+            <div style={{ fontSize: 36, marginBottom: 4 }}>🚫</div>
+            <h3 style={{ margin: 0, color: "var(--danger)" }}>TEAM TEMPORARILY BLOCKED</h3>
+            <p style={{ margin: "8px 0 0", fontSize: 14 }}>
+              {teamData.blockReason || "You have been blocked due to multiple consecutive wrong QR code scans."}
+            </p>
+            {teamData.blockedUntil && (
+              <p className="mono" style={{ margin: "6px 0 0", fontWeight: 700, color: "var(--gold)" }}>
+                Unblocks at: {new Date(teamData.blockedUntil).toLocaleTimeString()}
+              </p>
+            )}
+          </div>
+        )}
+
         <div className="spread" style={{ marginBottom: 24 }}>
           <div>
             <h2 style={{ margin: "0 0 4px" }}>🏴‍☠️ {teamData?.teamName} {currentEvent ? `(${currentEvent.name})` : ""}</h2>

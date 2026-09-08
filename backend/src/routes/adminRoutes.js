@@ -55,6 +55,7 @@ router.get("/submissions", listSubmissions);
 router.get("/scans", listScans);
 
 router.get("/event", eventControl);
+router.post("/events/create", require("../controllers/adminController").createEvent);
 router.put("/event/status", setEventStatus);
 router.put("/event/settings", updateSettings);
 router.post("/event/reset", resetEvent);

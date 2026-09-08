@@ -43,6 +43,7 @@ const teamSchema = new mongoose.Schema(
     clueUnlocked: { type: Boolean, default: true },
     solvedClues: { type: [solvedClueSchema], default: [] },
     wrongScans: { type: Number, default: 0 },
+    consecutiveWrongScans: { type: Number, default: 0 },
     lockedClue: { type: Boolean, default: false },
 
     // Team Blocking Engine Fields
@@ -101,6 +102,7 @@ teamSchema.methods.toSafeJSON = function () {
     clueUnlocked: this.clueUnlocked,
     solvedClues: this.solvedClues,
     wrongScans: this.wrongScans,
+    consecutiveWrongScans: this.consecutiveWrongScans,
     lockedClue: this.lockedClue,
     blocked: this.blocked,
     blockedUntil: this.blockedUntil,

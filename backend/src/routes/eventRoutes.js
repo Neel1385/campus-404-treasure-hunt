@@ -269,12 +269,17 @@ router.get("/:eventId/qrcodes/zip", protect, adminOnly, enforceEventIsolation, a
     const qrs = await QRCode.find({ eventId: req.params.eventId }).populate("clueId", "clueNumber title");
 
     const zip = new JSZip();
-    for (const qr of qrs) {
-      const url = qrService.qrUrl(qr.qrId);
-      const dataDataUrl = await qrcode.toDataURL(url, { errorCorrectionLevel: "H", margin: 2, width: 300 });
-      const base64Data = dataDataUrl.replace(/^data:image\/png;base64,/, "");
-      const cleanName = (qr.checkpointName || (qr.clueId ? qr.clueId.title : "QR")).replace(/[^a-zA-Z0-9_-]/g, "_");
-      zip.file(`QR_${qr.qrId}_${qr.type}_${cleanName}.png`, base64Data, { base64: true });
+    if (qrs.length === 0) {
+      // Add a placeholder file if no QRs exist yet
+      zip.file("README.txt", "No QR codes created for this event yet.");
+    } else {
+      for (const qr of qrs) {
+        const url = qrService.qrUrl(qr.qrId);
+        const dataDataUrl = await qrcode.toDataURL(url, { errorCorrectionLevel: "H", margin: 2, width: 300 });
+        const base64Data = dataDataUrl.replace(/^data:image\/png;base64,/, "");
+        const cleanName = (qr.checkpointName || (qr.clueId ? qr.clueId.title : "QR")).replace(/[^a-zA-Z0-9_-]/g, "_");
+        zip.file(`QR_${qr.qrId}_${qr.type}_${cleanName}.png`, base64Data, { base64: true });
+      }
     }
 
     const zipBuffer = await zip.generateAsync({ type: "nodebuffer" });

@@ -442,6 +442,26 @@ const updateSettings = asyncHandler(async (req, res) => {
   return success(res, { event }, "Settings updated");
 });
 
+const createEvent = asyncHandler(async (req, res) => {
+  const body = req.body || {};
+  const name = String(body.name || "CAMPUS 404").trim();
+  const description = String(body.description || "SCAN. SOLVE. SEARCH. SURVIVE.").trim();
+  const duration = Number(body.duration) || 60; // minutes
+  const rulesAndRegulations = body.rulesAndRegulations || undefined;
+
+  const event = await Event.create({
+    name,
+    description,
+    duration,
+    status: "DRAFT",
+    rulesAndRegulations,
+    settings: body.settings || {},
+  });
+
+  await writeAudit(req.team, "EVENT_CREATED", "Event", String(event._id), undefined, event.name, `Event ${name} created with duration ${duration} mins`, event._id);
+  return success(res, { event }, `Event "${name}" created.`, 201);
+});
+
 const deleteEvent = asyncHandler(async (req, res) => {
   const eventId = req.params.eventId || (await resolveEventId(req));
   const { deleteTeams, deleteClues, deleteQRs, deleteLogs, deleteSideQuests } = req.body || {};
@@ -534,6 +554,7 @@ module.exports = {
   eventControl,
   setEventStatus,
   updateSettings,
+  createEvent,
   resetEvent,
   deleteEvent,
   listAuditLogs,

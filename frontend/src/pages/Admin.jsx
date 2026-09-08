@@ -283,11 +283,25 @@ function Overview({ token, run, flash, selectedEventId, setSelectedEventId }) {
     loadEvents().catch(() => {});
   };
 
-  const createNewEvent = async () => {
-    const name = window.prompt("Enter new Event name:");
-    if (!name) return;
-    const res = await run(() => api.post("/events", { name, status: "DRAFT" }, { token }));
-    flash(`Event "${res.name}" created!`);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newEventName, setNewEventName] = useState("");
+  const [newEventDesc, setNewEventDesc] = useState("");
+  const [newEventDuration, setNewEventDuration] = useState(60);
+
+  const createNewEvent = async (e) => {
+    e.preventDefault();
+    if (!newEventName.trim()) return;
+    const res = await run(() => api.post("/admin/events/create", {
+      name: newEventName.trim(),
+      description: newEventDesc.trim(),
+      duration: Number(newEventDuration),
+      status: "DRAFT"
+    }, { token }));
+    flash(`Event "${res.event.name}" created with timer ${res.event.duration} minutes!`);
+    setShowCreateModal(false);
+    setNewEventName("");
+    setNewEventDesc("");
+    setNewEventDuration(60);
     loadEvents().catch(() => {});
   };
 
@@ -337,7 +351,7 @@ function Overview({ token, run, flash, selectedEventId, setSelectedEventId }) {
             <button className="btn small secondary" onClick={generateAssignments}>
               🎲 Generate Clue Assignments
             </button>
-            <button className="btn small ok" onClick={createNewEvent}>
+            <button className="btn small ok" onClick={() => setShowCreateModal(true)}>
               + Create Event
             </button>
           </div>
@@ -371,6 +385,66 @@ function Overview({ token, run, flash, selectedEventId, setSelectedEventId }) {
           )}
         </div>
       </div>
+
+      {showCreateModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}>
+          <form onSubmit={createNewEvent} className="card animate-scale-up" style={{ width: "100%", maxWidth: 500, background: "var(--bg-1)" }}>
+            <h3 style={{ color: "var(--gold)", margin: "0 0 12px" }}>🎯 Create New Treasure Hunt Event</h3>
+            <div className="field" style={{ marginBottom: 12 }}>
+              <label>Event Name *</label>
+              <input
+                type="text"
+                placeholder="e.g. CAMPUS 404 - Winter Quest"
+                value={newEventName}
+                onChange={(e) => setNewEventName(e.target.value)}
+                required
+              />
+            </div>
+            <div className="field" style={{ marginBottom: 12 }}>
+              <label>Description / Subtitle</label>
+              <input
+                type="text"
+                placeholder="e.g. SCAN. SOLVE. SEARCH. SURVIVE."
+                value={newEventDesc}
+                onChange={(e) => setNewEventDesc(e.target.value)}
+              />
+            </div>
+            <div className="field" style={{ marginBottom: 16 }}>
+              <label>Event Duration / Hunt Timer</label>
+              <div className="row" style={{ gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+                {[30, 45, 60, 90, 120, 180].map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    className={`btn small ${Number(newEventDuration) === m ? "ok" : "secondary"}`}
+                    onClick={() => setNewEventDuration(m)}
+                  >
+                    {m >= 60 ? `${m / 60} hr${m > 60 ? "s" : ""}` : `${m} mins`}
+                  </button>
+                ))}
+              </div>
+              <div className="row" style={{ gap: 8 }}>
+                <input
+                  type="number"
+                  min="5"
+                  max="1440"
+                  value={newEventDuration}
+                  onChange={(e) => setNewEventDuration(e.target.value)}
+                  style={{ width: 120 }}
+                />
+                <span className="muted" style={{ fontSize: 13 }}>Custom Duration (Minutes)</span>
+              </div>
+              <p className="muted" style={{ fontSize: 12, margin: "6px 0 0" }}>
+                ⏰ Once the timer expires during live gameplay, scans and submissions will automatically stop for all teams.
+              </p>
+            </div>
+            <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
+              <button className="btn secondary" type="button" onClick={() => setShowCreateModal(false)}>Cancel</button>
+              <button className="btn ok" type="submit">+ Create Event</button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {showDeleteModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}>
@@ -441,22 +515,7 @@ function Overview({ token, run, flash, selectedEventId, setSelectedEventId }) {
                 />
               </div>
 
-              <h4>🎨 Dynamic Event Website Theme</h4>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 16 }}>
-                <div className="field">
-                  <label>Primary Theme Color</label>
-                  <input
-                    type="color"
-                    value={settingsDraft.theme?.primaryColor || "#10b981"}
-                    onChange={(e) => setSettingsDraft({
-                      ...settingsDraft,
-                      theme: { ...settingsDraft.theme, primaryColor: e.target.value }
-                    })}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+              <div style={{ marginBottom: 16 }}>
                 <label className="row">
                   <input
                     type="checkbox"
@@ -468,28 +527,6 @@ function Overview({ token, run, flash, selectedEventId, setSelectedEventId }) {
                   />
                   <span>Enable Physical Secret Code Form for Players</span>
                 </label>
-                <div className="field">
-                  <label>Accent Gold Color</label>
-                  <input
-                    type="color"
-                    value={settingsDraft.theme?.accentColor || "#f59e0b"}
-                    onChange={(e) => setSettingsDraft({
-                      ...settingsDraft,
-                      theme: { ...settingsDraft.theme, accentColor: e.target.value }
-                    })}
-                  />
-                </div>
-                <div className="field">
-                  <label>Background Color</label>
-                  <input
-                    type="color"
-                    value={settingsDraft.theme?.backgroundColor || "#0f172a"}
-                    onChange={(e) => setSettingsDraft({
-                      ...settingsDraft,
-                      theme: { ...settingsDraft.theme, backgroundColor: e.target.value }
-                    })}
-                  />
-                </div>
               </div>
               <h4>⏱️ Event Timer & Duration Controls</h4>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
@@ -552,9 +589,9 @@ function Overview({ token, run, flash, selectedEventId, setSelectedEventId }) {
                 </div>
               </div>
 
-              <h4>Wrong QR Blocking Engine</h4>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <label className="row">
+              <h4>Wrong QR Blocking Engine (Consecutive Scans)</h4>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                <label className="row" style={{ gridColumn: "span 3" }}>
                   <input
                     type="checkbox"
                     checked={!!settingsDraft.settings?.wrongScanBlockingEnabled}
@@ -565,6 +602,32 @@ function Overview({ token, run, flash, selectedEventId, setSelectedEventId }) {
                   />
                   <span>Enable Wrong-Scan Blocking Engine</span>
                 </label>
+                <div className="field">
+                  <label>Consecutive Wrong Scans Limit</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="20"
+                    value={settingsDraft.settings?.wrongScanBlockThreshold || 2}
+                    onChange={(e) => setSettingsDraft({
+                      ...settingsDraft,
+                      settings: { ...settingsDraft.settings, wrongScanBlockThreshold: Number(e.target.value) }
+                    })}
+                  />
+                </div>
+                <div className="field">
+                  <label>Block Duration (Minutes)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="1440"
+                    value={settingsDraft.settings?.wrongScanBlockDuration || 5}
+                    onChange={(e) => setSettingsDraft({
+                      ...settingsDraft,
+                      settings: { ...settingsDraft.settings, wrongScanBlockDuration: Number(e.target.value) }
+                    })}
+                  />
+                </div>
                 <div className="field">
                   <label>Strategy</label>
                   <select
@@ -1030,7 +1093,7 @@ function Clues({ token, run, flash, eventId }) {
           title: form.title,
           description: form.description,
           checkpointName: form.checkpointName,
-          correctAnswer: form.correctAnswer,
+          correctAnswer: form.correctAnswer || "QR_SCAN",
           points: Number(form.points),
         },
         { token }
@@ -1107,8 +1170,8 @@ function Clues({ token, run, flash, eventId }) {
                 type="button"
                 className="btn small ghost"
                 onClick={() => setBulkJson(JSON.stringify([
-                  { clueNumber: 1, title: "Library Secret", description: "Look under desk 3", checkpointName: "Library", correctAnswer: "BOOK", points: 10 },
-                  { clueNumber: 2, title: "Lab Cipher", description: "Read the periodic table", checkpointName: "Science Lab", correctAnswer: "NEON", points: 15 }
+                  { clueNumber: 1, title: "Old Library Station", description: "Find the oldest reading room on campus.", checkpointName: "Library Main Desk", correctAnswer: "QR_SCAN", points: 10 },
+                  { clueNumber: 2, title: "Science Lab Station", description: "Located near the chemistry hallway.", checkpointName: "Lab 204", correctAnswer: "QR_SCAN", points: 15 }
                 ], null, 2))}
               >
                 📄 Demo JSON
@@ -1116,7 +1179,7 @@ function Clues({ token, run, flash, eventId }) {
               <button
                 type="button"
                 className="btn small ghost"
-                onClick={() => setBulkJson("clueNumber,title,description,checkpointName,correctAnswer,points\n1,Library Secret,Look under desk 3,Library,BOOK,10\n2,Lab Cipher,Read the periodic table,Science Lab,NEON,15")}
+                onClick={() => setBulkJson("clueNumber,title,description,checkpointName,correctAnswer,points\n1,Old Library Station,Find the oldest reading room on campus.,Library Main Desk,QR_SCAN,10\n2,Science Lab Station,Located near the chemistry hallway.,Lab 204,QR_SCAN,15")}
               >
                 📊 Demo CSV
               </button>
@@ -1195,10 +1258,11 @@ function Clues({ token, run, flash, eventId }) {
         <form onSubmit={create} style={{ marginBottom: 16, background: "var(--bg-2)", padding: 12, borderRadius: 6 }}>
           <div className="field"><label>Clue #</label><input type="number" value={form.clueNumber} onChange={(e) => setForm({ ...form, clueNumber: e.target.value })} required /></div>
           <div className="field"><label>Title</label><input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required /></div>
-          <div className="field"><label>Checkpoint Name</label><input value={form.checkpointName} onChange={(e) => setForm({ ...form, checkpointName: e.target.value })} required /></div>
-          <div className="field"><label>Description</label><input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} required /></div>
-          <div className="field"><label>Correct Answer</label><input value={form.correctAnswer} onChange={(e) => setForm({ ...form, correctAnswer: e.target.value })} required /></div>
-          <button className="btn small" type="submit" style={{ marginTop: 8 }}>Save Clue</button>
+          <div className="field"><label>Checkpoint / Location Name *</label><input placeholder="e.g. Science Library 2nd Floor" value={form.checkpointName} onChange={(e) => setForm({ ...form, checkpointName: e.target.value })} required /></div>
+          <div className="field"><label>Riddle / Description *</label><textarea placeholder="Location riddle leading players to the physical checkpoint..." value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} required style={{ width: "100%", padding: 8 }} /></div>
+          <div className="field"><label>Points Value</label><input type="number" value={form.points} onChange={(e) => setForm({ ...form, points: e.target.value })} required /></div>
+          <div className="field"><label>Answer Key / Secret Code (Optional - Defaults to QR Scan)</label><input placeholder="QR_SCAN" value={form.correctAnswer} onChange={(e) => setForm({ ...form, correctAnswer: e.target.value })} /></div>
+          <button className="btn small ok" type="submit" style={{ marginTop: 8 }}>Save Clue</button>
         </form>
       )}
 
