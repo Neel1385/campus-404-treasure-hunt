@@ -780,25 +780,28 @@ function LeaderboardTab({ token, run, eventId }) {
           className="card alert ok animate-fade-in"
           style={{
             marginBottom: 20,
-            padding: "16px 20px",
-            background: "rgba(16, 185, 129, 0.15)",
-            border: "2px solid var(--ok)",
-            borderRadius: 8,
+            padding: "20px 24px",
+            background: "rgba(16, 185, 129, 0.2)",
+            border: "2px solid var(--gold)",
+            borderRadius: 12,
+            boxShadow: "0 0 25px rgba(245, 158, 11, 0.3)",
           }}
         >
           <div className="spread">
-            <div className="row" style={{ gap: 12 }}>
-              <span style={{ fontSize: 32 }}>🏆</span>
+            <div className="row" style={{ gap: 16 }}>
+              <span style={{ fontSize: 40 }}>🏆</span>
               <div>
-                <h3 style={{ margin: 0, color: "var(--gold)" }}>
-                  FIRST WINNER DECLARED: {firstWinnerAlert.teamName}
-                </h3>
-                <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--text)" }}>
-                  Correctly guessed the Treasure Code Pieces first at <strong>{firstWinnerAlert.timestamp}</strong>!
+                <h2 style={{ margin: 0, color: "var(--gold)" }}>
+                  🎉 FIRST WINNER DECLARED! {firstWinnerAlert.teamName}
+                </h2>
+                <p style={{ margin: "6px 0 0", fontSize: 14, color: "var(--text)" }}>
+                  Team <strong>{firstWinnerAlert.teamName}</strong> was the FIRST to correctly solve the <strong>Treasure Code Pieces</strong> at <strong>{firstWinnerAlert.timestamp}</strong>!
+                  <br />
+                  🎁 <strong>Physical Reward:</strong> This team wins the physical treasure chest bounty!
                 </p>
               </div>
             </div>
-            <button className="btn small ghost" onClick={() => setFirstWinnerAlert(null)}>Dismiss</button>
+            <button className="btn small secondary" onClick={() => setFirstWinnerAlert(null)}>Dismiss Alert</button>
           </div>
         </div>
       )}
@@ -1772,30 +1775,46 @@ function QRCodes({ token, run, flash, eventId }) {
         </div>
       )}
 
-      {qrs.map((qr) => (
-        <div key={qr._id} className="card" style={{ background: "var(--bg-2)", padding: 14, marginBottom: 8 }}>
-          <div className="spread">
-            <div>
-              <span className="mono" style={{ fontWeight: 700, fontSize: 16, color: "var(--gold)" }}>{qr.qrId}</span>
-              <span className="pill info" style={{ marginLeft: 8, fontSize: 11 }}>Type: {qr.type}</span>
-              {qr.checkpointName && <span className="muted" style={{ marginLeft: 8, fontSize: 13 }}>({qr.checkpointName})</span>}
-              {qr.branding?.customText && (
-                <div style={{ fontSize: 12, color: "var(--gold-light)", marginTop: 4 }}>
-                  🏷️ Label Text: "{qr.branding.customText}"
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
+        {qrs.map((qr) => {
+          const qrScanUrl = `${window.location.origin}/scan/${qr.qrId}`;
+          const qrDataUri = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrScanUrl)}`;
+
+          return (
+            <div key={qr._id} className="card" style={{ background: "var(--bg-2)", padding: 14, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+              <div>
+                <div className="spread" style={{ marginBottom: 8 }}>
+                  <span className="mono" style={{ fontWeight: 700, fontSize: 16, color: "var(--gold)" }}>{qr.qrId}</span>
+                  <span className="pill info" style={{ fontSize: 11 }}>{qr.type}</span>
                 </div>
-              )}
-              {qr.branding?.logo && (
-                <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
-                  🖼️ Logo URL: <span className="mono">{qr.branding.logo}</span>
+
+                {/* Inline Visual QR Code Preview */}
+                <div style={{ textAlign: "center", background: "#ffffff", padding: 10, borderRadius: 8, margin: "8px 0" }}>
+                  <img
+                    src={qrDataUri}
+                    alt={`QR ${qr.qrId}`}
+                    style={{ width: 140, height: 140, display: "block", margin: "0 auto" }}
+                  />
+                  {qr.branding?.customText && (
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#78350f", background: "#fef3c7", padding: "2px 6px", borderRadius: 4, marginTop: 4 }}>
+                      {qr.branding.customText}
+                    </div>
+                  )}
                 </div>
-              )}
+
+                {qr.checkpointName && <div className="muted" style={{ fontSize: 13, textAlign: "center" }}>📍 {qr.checkpointName}</div>}
+              </div>
+
+              <div className="spread" style={{ marginTop: 12, paddingTop: 8, borderTop: "1px solid var(--border)" }}>
+                <span className="muted mono" style={{ fontSize: 11 }}>Status: {qr.active ? "Active" : "Inactive"}</span>
+                <button className={`btn small ${qr.active ? "secondary" : "ok"}`} onClick={() => toggle(qr)}>
+                  {qr.active ? "Deactivate" : "Activate"}
+                </button>
+              </div>
             </div>
-            <button className="btn small secondary" onClick={() => toggle(qr)}>
-              {qr.active ? "Deactivate" : "Activate"}
-            </button>
-          </div>
-        </div>
-      ))}
+          );
+        })}
+      </div>
     </div>
   );
 }

@@ -105,6 +105,12 @@ export default function Dashboard() {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
+  const [nowTs, setNowTs] = useState(Date.now());
+
+  useEffect(() => {
+    const timer = setInterval(() => setNowTs(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   const syncPending = useCallback(async () => {
     if (!currentEvent?._id || !token || !navigator.onLine) return;
@@ -292,7 +298,7 @@ export default function Dashboard() {
           </div>
         )}
 
-        {/* Team Blocked Banner */}
+        {/* Team Blocked Banner with Live Timer */}
         {teamData?.blocked && (
           <div
             className="alert danger animate-fade-in"
@@ -310,11 +316,24 @@ export default function Dashboard() {
             <p style={{ margin: "8px 0 0", fontSize: 14 }}>
               {teamData.blockReason || "You have been blocked due to multiple consecutive wrong QR code scans."}
             </p>
-            {teamData.blockedUntil && (
-              <p className="mono" style={{ margin: "6px 0 0", fontWeight: 700, color: "var(--gold)" }}>
-                Unblocks at: {new Date(teamData.blockedUntil).toLocaleTimeString()}
-              </p>
-            )}
+            {teamData.blockedUntil && (() => {
+              const untilMs = new Date(teamData.blockedUntil).getTime() - nowTs;
+              const mins = Math.max(0, Math.floor(untilMs / 60000));
+              const secs = Math.max(0, Math.floor((untilMs % 60000) / 1000));
+              const pad = (n) => String(n).padStart(2, "0");
+              const remainingStr = untilMs > 0 ? `${pad(mins)}:${pad(secs)}` : "00:00 (Unblocking...)";
+
+              return (
+                <div style={{ marginTop: 12 }}>
+                  <span className="pill warn mono" style={{ fontSize: 16, padding: "6px 16px", border: "1px solid var(--gold)" }}>
+                    ⏳ Live Block Countdown: {remainingStr}
+                  </span>
+                  <div className="muted mono" style={{ fontSize: 12, marginTop: 6 }}>
+                    Unblocks at: {new Date(teamData.blockedUntil).toLocaleTimeString()}
+                  </div>
+                </div>
+              );
+            })()}
           </div>
         )}
 
