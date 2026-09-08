@@ -107,7 +107,7 @@ eventSchema.methods.effectiveStatus = function () {
   if (this.status === EVENT_STATUS.ENDED || this.status === EVENT_STATUS.ARCHIVED) return this.status;
   if (this.status === EVENT_STATUS.DRAFT || this.status === EVENT_STATUS.READY) return this.status;
   if (this.status === EVENT_STATUS.PAUSED) return EVENT_STATUS.PAUSED;
-  if (this.endTime && new Date() >= this.endTime) return EVENT_STATUS.ENDED;
+  if (this.endTime && new Date() >= this.endTime) return EVENT_STATUS.PAUSED;
   return EVENT_STATUS.RUNNING; // or ACTIVE
 };
 

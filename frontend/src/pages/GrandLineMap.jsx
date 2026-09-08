@@ -110,13 +110,14 @@ export default function GrandLineMap() {
                   const solved = solvedClues.find((s) => s.clueNumber === clueObj.clueNumber || s.clueNumber === level);
 
                   const icon = item.isFinal || level === totalSteps ? "🏆" : ISLAND_ICONS[level] || "🏝️";
-                  const checkpointName = clueObj.checkpointName || clueObj.title || `Island Step ${level}`;
+                  // Hide map title / checkpoint name until team reaches / completes the station via correct QR scan
+                  const displayName = isLocked ? "🔒 Uncharted Station" : (clueObj.checkpointName || clueObj.title || `Island Step ${level}`);
 
                   return (
                     <div key={item._id || level} style={{ position: "relative" }}>
                       <div
                         className={`island-node ${isCompleted ? "completed" : ""} ${isCurrent ? "current" : ""} ${isLocked ? "locked" : ""}`}
-                        onClick={() => !isLocked && setSelectedNode({ level, name: checkpointName, title: clueObj.title, solved, isCurrent, isCompleted, isFinal: item.isFinal })}
+                        onClick={() => !isLocked && setSelectedNode({ level, name: displayName, title: isLocked ? "Uncharted" : clueObj.title, solved, isCurrent, isCompleted, isFinal: item.isFinal })}
                         style={{
                           padding: "16px 20px",
                           borderRadius: 8,
@@ -130,7 +131,7 @@ export default function GrandLineMap() {
                             : isCompleted
                             ? "1px solid var(--event-primary, #10b981)"
                             : "1px dashed var(--border)",
-                          filter: isLocked ? "blur(3px) opacity(0.35)" : "none",
+                          filter: isLocked ? "opacity(0.4)" : "none",
                           cursor: isLocked ? "not-allowed" : "pointer",
                           transition: "all 0.2s ease",
                         }}
@@ -138,16 +139,14 @@ export default function GrandLineMap() {
                         <div className="island-icon" style={{ fontSize: 28 }}>{icon}</div>
                         <div className="island-info" style={{ flex: 1, marginLeft: 16 }}>
                           <h4 style={{ margin: 0, fontSize: 16, color: isCurrent ? "var(--gold)" : "var(--text)" }}>
-                            Step {level}: {checkpointName} {isCurrent && <span style={{ fontSize: 14 }}>⛵ (Current Station)</span>}
+                            Step {level}: {displayName} {isCurrent && <span style={{ fontSize: 14 }}>⛵ (Current Station)</span>}
                           </h4>
                           <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--muted)" }}>
                             {isCompleted
-                              ? `Decoded! +${solved?.pointsEarned || clueObj.points || 10} pts`
+                              ? `Decoded & Conquered! +${solved?.pointsEarned || clueObj.points || 10} pts`
                               : isCurrent
-                              ? `Current Station — Find the QR Code at ${checkpointName}!`
-                              : isLocked
-                              ? "🔒 Locked — Complete previous stations first"
-                              : "Unlocked"}
+                              ? "Current Active Station — Follow riddle & scan matching QR code!"
+                              : "🔒 Locked — Complete previous stations first"}
                           </p>
                         </div>
                         <div className="island-status" style={{ fontSize: 20 }}>

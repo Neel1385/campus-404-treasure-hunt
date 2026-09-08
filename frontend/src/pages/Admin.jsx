@@ -2005,12 +2005,25 @@ function Audit({ token, run, eventId }) {
       </div>
 
       <ul className="list">
-        {logs.map((l) => (
-          <li key={l._id}>
-            <span className="pill info" style={{ fontSize: 11 }}>{l.action}</span>{" "}
-            <strong>{l.adminName || "Admin"}</strong>: {l.note}
-          </li>
-        ))}
+        {logs.map((l) => {
+          const date = l.createdAt ? new Date(l.createdAt) : null;
+          const pad = (n, len = 2) => String(n).padStart(len, "0");
+          const timeStr = date
+            ? `${date.toLocaleDateString()} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}.${pad(date.getMilliseconds(), 3)}`
+            : "—";
+
+          return (
+            <li key={l._id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <span className="pill info" style={{ fontSize: 11 }}>{l.action}</span>{" "}
+                <strong>{l.adminName || "Admin"}</strong>: {l.note}
+              </div>
+              <span className="mono muted" style={{ fontSize: 11, marginLeft: 12 }}>
+                {timeStr}
+              </span>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );
