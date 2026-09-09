@@ -139,13 +139,17 @@ const login = asyncHandler(async (req, res) => {
     throw new ApiError("No clues have been assigned to your team yet. Please wait for the organizer.", 403, "NO_CLUES_ASSIGNED");
   }
 
+  const now = new Date();
   if (!team.startTime) {
-    team.startTime = new Date();
-    await team.save();
+    team.startTime = now;
   }
+  team.lastActiveAt = now;
+  const crypto = require("crypto");
+  team.sessionToken = crypto.randomBytes(16).toString("hex");
+  await team.save();
 
   const token = signToken(team);
-  return success(res, { token, team: team.toSafeJSON() }, "Login successful");
+  return success(res, { token, sessionToken: team.sessionToken, team: team.toSafeJSON() }, "Login successful");
 });
 
 // GET /api/auth/me

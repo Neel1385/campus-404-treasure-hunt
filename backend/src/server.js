@@ -7,6 +7,7 @@ const { connectDB } = require("./config/db");
 const { env, port, clientUrl, mongoUri } = require("./config/env");
 const { standardLimiter } = require("./middleware/rateLimiter");
 const { errorHandler, notFound } = require("./middleware/errorHandler");
+const loggerMiddleware = require("./middleware/loggerMiddleware");
 
 // Routes
 const authRoutes = require("./routes/authRoutes");
@@ -31,6 +32,7 @@ app.use(cors({
   optionsSuccessStatus: 204,
 }));
 app.use(express.json({ limit: "1mb" }));
+app.use(loggerMiddleware);
 
 // Health check
 app.get("/health", (_req, res) =>

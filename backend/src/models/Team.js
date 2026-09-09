@@ -70,6 +70,8 @@ const teamSchema = new mongoose.Schema(
     startTime: { type: Date },
     endTime: { type: Date },
     finalScore: { type: Number },
+    lastActiveAt: { type: Date, default: Date.now },
+    sessionToken: { type: String, default: "" },
   },
   { timestamps: true }
 );
@@ -118,6 +120,8 @@ teamSchema.methods.toSafeJSON = function () {
     startTime: this.startTime,
     endTime: this.endTime,
     finalScore: this.finalScore,
+    lastActiveAt: this.lastActiveAt,
+    sessionToken: this.sessionToken,
     members: this.members,
     createdAt: this.createdAt,
   };

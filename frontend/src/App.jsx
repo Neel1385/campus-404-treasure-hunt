@@ -21,7 +21,7 @@ function Lazy({ children }) {
 }
 
 function RequirePlayer({ children }) {
-  const { isLoggedIn } = useAuth();
+  const { isLoggedIn, logout } = useAuth();
   const location = useLocation();
   if (!isLoggedIn) return <Navigate to="/login" replace state={{ from: location.pathname }} />;
   return children;

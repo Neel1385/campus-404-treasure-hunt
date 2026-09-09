@@ -30,6 +30,10 @@ const protect = asyncHandler(async (req, _res, next) => {
     throw new ApiError("Your team has been disabled. Contact an organizer.", 403, "TEAM_DISABLED");
   }
 
+  // Update session last active time
+  team.lastActiveAt = new Date();
+  await team.save().catch(() => {});
+
   req.team = team;
   next();
 });
