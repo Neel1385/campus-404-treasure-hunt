@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect } from "react";
+import { createContext, useCallback, useContext, useEffect, useState } from "react";
 import { api, EVENT_KEY } from "./api.js";
 
 const EventContext = createContext();
