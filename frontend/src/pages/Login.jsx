@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth.jsx";
+import { cacheTeamSession } from "../offlineStorage.js";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -16,7 +17,14 @@ export default function Login() {
     setError("");
     setBusy(true);
     try {
-      await login(identifier, password);
+      const res = await login(identifier, password);
+      if (res?.team?.role === "admin") {
+        navigate("/admin", { replace: true });
+        return;
+      }
+      if (res?.team?.eventId) {
+        await cacheTeamSession(res.team.eventId, { meData: { team: res.team } });
+      }
       const from = location.state?.from || "/dashboard";
       navigate(from, { replace: true });
     } catch (err) {

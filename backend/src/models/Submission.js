@@ -2,7 +2,8 @@ const mongoose = require("mongoose");
 
 const submissionSchema = new mongoose.Schema(
   {
-    teamId: { type: mongoose.Schema.Types.ObjectId, ref: "Team", required: true },
+    eventId: { type: mongoose.Schema.Types.ObjectId, ref: "Event", required: true, index: true },
+    teamId: { type: mongoose.Schema.Types.ObjectId, ref: "Team", required: true, index: true },
     clueId: { type: mongoose.Schema.Types.ObjectId, ref: "Clue", required: true },
     clueNumber: { type: Number },
     answer: { type: String, trim: true },

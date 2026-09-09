@@ -20,7 +20,7 @@ export function AuthProvider({ children }) {
 
   const login = useCallback(async (identifier, password) => {
     const data = await api.post("/auth/login", { identifier, password });
-    const next = { token: data.token, team: data.team };
+    const next = { token: data.token, sessionToken: data.sessionToken, team: data.team };
     savePlayer(next);
     setAuth(next);
     return data.team;

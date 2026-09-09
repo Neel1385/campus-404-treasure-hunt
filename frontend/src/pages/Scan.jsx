@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { Html5Qrcode } from "html5-qrcode";
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
+import { useEvent } from "../EventContext.jsx";
 
 function extractQrId(text) {
   const raw = String(text || "").trim();
@@ -21,6 +22,7 @@ export default function Scan() {
   const { qrId } = useParams();
   const navigate = useNavigate();
   const { isLoggedIn, team: authTeam, token, logout } = useAuth();
+  const { currentEvent } = useEvent();
 
   const [manual, setManual] = useState(qrId || "");
   const [result, setResult] = useState(null);
@@ -37,9 +39,10 @@ export default function Scan() {
 
   useEffect(() => {
     if (isLoggedIn && token) {
-      api.get("/teams/me", { token }).then((d) => setTeamData(d.team)).catch(() => {});
+      const param = currentEvent?._id ? `?eventId=${currentEvent._id}` : "";
+      api.get(`/teams/me${param}`, { token }).then((d) => setTeamData(d.team)).catch(() => {});
     }
-  }, [isLoggedIn, token]);
+  }, [isLoggedIn, token, currentEvent]);
 
   const runScan = async (id) => {
     if (!isLoggedIn) {
@@ -51,8 +54,21 @@ export default function Scan() {
     setShowWarning(false);
     setBusy(true);
     try {
-      const data = await api.post("/game/scan", { qrId: id }, { token });
+      const payload = { qrId: id };
+      if (currentEvent?._id) payload.eventId = currentEvent._id;
+      const data = await api.post("/game/scan", payload, { token });
       setResult(data);
+
+      // Refresh team data
+      const param = currentEvent?._id ? `?eventId=${currentEvent._id}` : "";
+      api.get(`/teams/me${param}`, { token }).then((d) => setTeamData(d.team)).catch(() => {});
+
+      // Auto-close scanning popup / modal and navigate back to dashboard after 2.5 seconds on successful scan
+      if (data && data.success && data.correct) {
+        setTimeout(() => {
+          navigate("/dashboard");
+        }, 2500);
+      }
     } catch (err) {
       if (err.status === 401) {
         logout();
@@ -129,12 +145,34 @@ export default function Scan() {
 
   const currentLevel = teamData?.currentLevel || teamData?.currentClue || 1;
   const currentPoints = teamData?.points ?? 0;
+  const isEventInactive = currentEvent?.status === "DRAFT" || currentEvent?.status === "PAUSED" || currentEvent?.status === "ENDED";
 
   return (
     <div className="container narrow">
-      <h1 style={{ marginTop: 56 }}>🗿 Scan QR Code</h1>
+      <h1 style={{ marginTop: 56 }}>🗿 Scan QR Code {currentEvent ? `(${currentEvent.name})` : ""}</h1>
 
-      {busy && !result && (
+      {isEventInactive && (
+        <div className="alert warn animate-fade-in" style={{ padding: "20px", textAlign: "center", marginBottom: 24, border: "2px solid var(--gold)" }}>
+          <div style={{ fontSize: 36, marginBottom: 4 }}>
+            {currentEvent?.status === "PAUSED" ? "⏸️" : "📝"}
+          </div>
+          <h3 style={{ margin: 0, color: "var(--gold)" }}>
+            EVENT IS CURRENTLY {currentEvent?.status || "INACTIVE"}
+          </h3>
+          <p style={{ margin: "8px 0 0", fontSize: 14, color: "var(--text)" }}>
+            {currentEvent?.status === "PAUSED"
+              ? "The event is currently PAUSED by the organizer. Camera scanning is locked."
+              : "The event is in DRAFT status. QR scanning is disabled until the event is started."}
+          </p>
+          <div style={{ marginTop: 16 }}>
+            <Link to="/dashboard" className="btn small secondary" style={{ textDecoration: "none" }}>
+              ← Back to Dashboard
+            </Link>
+          </div>
+        </div>
+      )}
+
+      {!isEventInactive && busy && !result && (
         <div className="scan-hero">
           <h2>🗿 Scanning QR Code...</h2>
         </div>
@@ -162,12 +200,12 @@ export default function Scan() {
         </div>
       )}
 
-      {!showWarning && !result && !busy && (
+      {!isEventInactive && !showWarning && !result && !busy && (
         <div className="row" style={{ justifyContent: "center", marginBottom: 16 }}>
-          <button className={`btn ${camMode ? "secondary" : ""}`} onClick={camMode ? stopCamera : startCamera} disabled={busy}>
+          <button className={`btn ${camMode ? "secondary" : ""}`} onClick={camMode ? stopCamera : startCamera} disabled={busy || isEventInactive}>
             {camMode ? "■ Stop camera" : "🗿 Scan QR Code"}
           </button>
-          <button className={`btn ${!camMode ? "secondary" : ""}`} onClick={stopCamera}>
+          <button className={`btn ${!camMode ? "secondary" : ""}`} onClick={stopCamera} disabled={isEventInactive}>
             ⌨️ Enter Code
           </button>
         </div>
@@ -279,7 +317,7 @@ export default function Scan() {
             <>
               <div className="icon">⚓</div>
               <h2 style={{ color: "var(--danger)" }}>WRONG QR CODE!</h2>
-              <p>This QR Code is not for your current level.</p>
+              <p>{result.message || "Wrong QR, follow the clue and try again."}</p>
               <div className="stat-grid" style={{ maxWidth: 320, margin: "12px auto" }}>
                 {result.pointsLost != null && result.pointsLost > 0 && (
                   <div className="stat" style={{ borderColor: "rgba(255,77,109,0.4)" }}>

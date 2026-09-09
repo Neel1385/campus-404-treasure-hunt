@@ -2,10 +2,14 @@
 
 module.exports = {
   EVENT_STATUS: {
+    DRAFT: "DRAFT",
+    READY: "READY",
     NOT_STARTED: "NOT_STARTED",
+    RUNNING: "RUNNING",
     ACTIVE: "ACTIVE",
     PAUSED: "PAUSED",
     ENDED: "ENDED",
+    ARCHIVED: "ARCHIVED",
   },
 
   TEAM_STATUS: {
@@ -16,10 +20,13 @@ module.exports = {
 
   QR_TYPE: {
     NORMAL: "NORMAL",
+    DUMMY: "DUMMY",
     BONUS: "BONUS",
-    HINT: "HINT",
     TRAP: "TRAP",
+    HINT: "HINT",
     CHECKPOINT: "CHECKPOINT",
+    SIDE_QUEST: "SIDE_QUEST",
+    FINAL: "FINAL",
     ROAD_PONEGLYPH: "ROAD_PONEGLYPH",
   },
 
@@ -46,6 +53,7 @@ module.exports = {
     WRONG_ANSWER: "WRONG_ANSWER",
     HINT_PENALTY: "HINT_PENALTY",
     BONUS: "BONUS",
+    SIDE_QUEST: "SIDE_QUEST",
     FINAL_CHALLENGE: "FINAL_CHALLENGE",
     ADMIN_ADJUSTMENT: "ADMIN_ADJUSTMENT",
     TRAP: "TRAP",

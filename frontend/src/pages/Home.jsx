@@ -28,21 +28,18 @@ function fmtMs(ms) {
 }
 
 export default function Home() {
-  const { isLoggedIn, team, logout } = useAuth();
+  const { isLoggedIn } = useAuth();
   const [event, setEvent] = useState(null);
-  const [board, setBoard] = useState([]);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    Promise.all([
-      api.get("/event/status").catch(() => ({ event: null })),
-      api.get("/leaderboard").catch(() => ({ leaderboard: [] })),
-    ])
-      .then(([a, b]) => {
+    api.get("/event/status")
+      .then((a) => {
         setEvent(a.event);
-        setBoard(b.leaderboard || []);
       })
-      .catch(() => setError("Could not reach the game server."));
+      .catch(() => {
+        /* suppress banner error on public landing page */
+      });
   }, []);
 
   return (
@@ -64,7 +61,6 @@ export default function Home() {
               <Link to="/login" className="btn secondary">🧭 Start</Link>
             </>
           )}
-          <Link to="/leaderboard" className="btn ghost">💰 Leaderboard</Link>
           {isLoggedIn && (
             <Link to="/scan" className="btn ghost">🗿 Scan QR Code</Link>
           )}
@@ -122,46 +118,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Leaderboard preview */}
-        <h3 style={{ fontFamily: "var(--font-heading)", color: "var(--gold)", letterSpacing: "0.05em" }}>
-          🏴‍☠️ Leaderboard
-        </h3>
-        {board.length === 0 ? (
-          <div className="card muted" style={{ textAlign: "center", padding: 32 }}>
-            <div style={{ fontSize: 48, marginBottom: 8 }}>💰</div>
-            No teams have started yet. Be the first to earn points.
-          </div>
-        ) : (
-          <div className="card">
-            <table className="board top3">
-              <thead>
-                <tr>
-                  <th>#</th>
-                  <th>Team</th>
-                  <th>Level</th>
-                  <th>Progress</th>
-                  <th>Points</th>
-                </tr>
-              </thead>
-              <tbody>
-                {board.slice(0, 10).map((t) => (
-                  <tr key={t.teamId}>
-                    <td className={`rank ${t.rank <= 3 ? "accent" : ""}`}>
-                      {t.rank === 1 ? "🥇" : t.rank === 2 ? "🥈" : t.rank === 3 ? "🥉" : t.rank}
-                    </td>
-                    <td>
-                      <strong>{t.teamName}</strong>{" "}
-                      <span className="muted mono" style={{ fontSize: 12 }}>({t.teamId})</span>
-                    </td>
-                    <td className="mono">{LEVEL_ICONS[t.currentLevel || 1]} Lvl {t.currentLevel || 1}</td>
-                    <td className="muted">{t.progress} solved</td>
-                    <td className="mono" style={{ color: "var(--gold)" }}>💰 {t.points}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
 
         <p className="muted" style={{ textAlign: "center", marginTop: 32, fontFamily: "var(--font-heading)" }}>
           Game Master? <Link to="/admin/login">⚓ Admin Panel</Link>

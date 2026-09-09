@@ -1,6 +1,7 @@
 const jwt = require("jsonwebtoken");
 const { jwtSecret } = require("../config/env");
 const Team = require("../models/Team");
+const Event = require("../models/Event");
 const { ApiError } = require("../utils/ApiResponse");
 const asyncHandler = require("../utils/asyncHandler");
 
@@ -29,7 +30,36 @@ const protect = asyncHandler(async (req, _res, next) => {
     throw new ApiError("Your team has been disabled. Contact an organizer.", 403, "TEAM_DISABLED");
   }
 
+  // Update session last active time
+  team.lastActiveAt = new Date();
+  await team.save().catch(() => {});
+
   req.team = team;
+  next();
+});
+
+// Enforces that if an eventId parameter is present in the route/body, the team belongs to that event
+const enforceEventIsolation = asyncHandler(async (req, _res, next) => {
+  const eventId = req.params.eventId || req.body?.eventId || req.query?.eventId;
+  if (!eventId) return next();
+
+  // Validate event exists
+  const event = await Event.findById(eventId);
+  if (!event) {
+    throw new ApiError("Event not found.", 404, "EVENT_NOT_FOUND");
+  }
+  req.event = event;
+
+  // Admins are bypass
+  if (req.team && req.team.role === "admin") {
+    return next();
+  }
+
+  // Regular teams must match the eventId
+  if (req.team && String(req.team.eventId) !== String(eventId)) {
+    throw new ApiError("Access denied. Your team is not authorized for this event.", 403, "CROSS_EVENT_FORBIDDEN");
+  }
+
   next();
 });
 
@@ -41,4 +71,4 @@ const adminOnly = (req, _res, next) => {
   next();
 };
 
-module.exports = { protect, adminOnly };
+module.exports = { protect, adminOnly, enforceEventIsolation };

@@ -1,8 +1,8 @@
 const mongoose = require("mongoose");
 
-// Every manual/admin modification is recorded here.
 const auditLogSchema = new mongoose.Schema(
   {
+    eventId: { type: mongoose.Schema.Types.ObjectId, ref: "Event", index: true },
     adminId: { type: mongoose.Schema.Types.ObjectId, ref: "Team" },
     adminName: { type: String, default: "" },
     action: { type: String, required: true },
@@ -14,5 +14,7 @@ const auditLogSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+auditLogSchema.index({ eventId: 1, createdAt: -1 });
 
 module.exports = mongoose.model("AuditLog", auditLogSchema);

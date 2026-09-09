@@ -1,12 +1,16 @@
-const { Team, Submission, QRScan, Clue, Event, ScoreTransaction } = require("../models");
+const { Team, Submission, QRScan, Clue, Event, ScoreTransaction, TeamClueAssignment } = require("../models");
 const { success } = require("../utils/ApiResponse");
 const asyncHandler = require("../utils/asyncHandler");
 const scoreService = require("../services/scoreService");
 
 const me = asyncHandler(async (req, res) => {
   const team = await Team.findById(req.team._id);
-  const event = await Event.findOne({});
-  const totalClues = await Clue.countDocuments({ active: true });
+  const event = await Event.findById(team.eventId) || await Event.findOne({});
+
+  const assignments = await TeamClueAssignment.find({ eventId: team.eventId, teamId: team._id });
+  const totalAssignedClues = assignments.length;
+  const completedCluesCount = (team.solvedClues || []).length;
+  const remainingCluesCount = Math.max(0, totalAssignedClues - completedCluesCount);
   const rank = await scoreService.getTeamRank(req.team._id);
 
   return success(
@@ -20,8 +24,12 @@ const me = asyncHandler(async (req, res) => {
             remainingMs: event.remainingMs(),
           }
         : null,
-      totalClues,
-      totalLevels: totalClues,
+      totalClues: totalAssignedClues,
+      totalLevels: totalAssignedClues,
+      totalAssignedClues,
+      completedCluesCount,
+      remainingCluesCount,
+      hasAssignments: totalAssignedClues > 0,
       rank,
     },
     "Team dashboard loaded"
