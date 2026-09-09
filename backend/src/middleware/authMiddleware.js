@@ -52,7 +52,7 @@ const enforceEventIsolation = asyncHandler(async (req, _res, next) => {
   }
 
   // Regular teams must match the eventId
-  if (req.team && String(req.team.eventId) !== String(eventId)) {
+  if (req.team && req.team.eventId && String(req.team.eventId) !== String(eventId)) {
     throw new ApiError("Access denied. Your team is not authorized for this event.", 403, "CROSS_EVENT_FORBIDDEN");
   }
 

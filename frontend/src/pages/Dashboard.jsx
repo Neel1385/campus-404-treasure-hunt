@@ -227,12 +227,13 @@ export default function Dashboard() {
 
   const submitFinalSecretCode = async (e) => {
     e.preventDefault();
-    if (!currentEvent?._id || !secretCodeInput) return;
+    const targetEventId = teamData?.eventId || currentEvent?._id;
+    if (!targetEventId || !secretCodeInput) return;
     setError("");
     setNotice("");
     setBusy(true);
     try {
-      const res = await api.post(`/events/${currentEvent._id}/final-challenge/try-code`, { secretCode: secretCodeInput }, { token });
+      const res = await api.post(`/events/${targetEventId}/final-challenge/try-code`, { secretCode: secretCodeInput }, { token });
       setNotice(res.message);
       setSecretCodeInput("");
       await load();

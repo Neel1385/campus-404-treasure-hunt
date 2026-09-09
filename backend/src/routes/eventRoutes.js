@@ -271,7 +271,8 @@ router.post("/:eventId/side-quests/:questId/complete", protect, enforceEventIsol
 router.post("/:eventId/final-challenge/try-code", protect, enforceEventIsolation, async (req, res, next) => {
   try {
     const { secretCode } = req.body;
-    const result = await gameService.tryFinalSecretCode(req.params.eventId, req.team, secretCode);
+    const targetEventId = req.team.eventId || req.params.eventId;
+    const result = await gameService.tryFinalSecretCode(targetEventId, req.team, secretCode);
     res.json({ success: true, data: result });
   } catch (err) {
     next(err);
