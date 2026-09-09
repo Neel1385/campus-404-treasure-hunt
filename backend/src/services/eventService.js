@@ -63,11 +63,17 @@ async function getEventById(eventId) {
     event = await getOrCreateEvent();
   }
 
-  // Auto-pause if event timer has reached 00:00 while event status is RUNNING/ACTIVE
-  if ((event.status === EVENT_STATUS.RUNNING || event.status === EVENT_STATUS.ACTIVE) && event.endTime && new Date() >= event.endTime) {
-    event.status = EVENT_STATUS.PAUSED;
-    event.pausedAt = event.endTime;
-    await event.save();
+  // Ensure active/running event has valid startTime & handle timer expiration
+  if (event.status === EVENT_STATUS.RUNNING || event.status === EVENT_STATUS.ACTIVE) {
+    if (!event.endTime) {
+      event.startTime = event.startTime || new Date();
+      event.endTime = new Date(Date.now() + (event.duration || 60) * 60 * 1000);
+      await event.save();
+    } else if (new Date() >= event.endTime) {
+      event.status = EVENT_STATUS.PAUSED;
+      event.pausedAt = event.endTime;
+      await event.save();
+    }
   }
 
   return event;

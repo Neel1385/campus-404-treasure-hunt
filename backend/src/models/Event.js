@@ -117,17 +117,15 @@ eventSchema.methods.effectiveStatus = function () {
 eventSchema.methods.remainingMs = function () {
   const status = this.effectiveStatus();
   if (status === EVENT_STATUS.ENDED || status === EVENT_STATUS.ARCHIVED) return 0;
-  if (status === EVENT_STATUS.DRAFT || status === EVENT_STATUS.READY) {
-    return this.startTime ? Math.max(0, this.startTime - new Date()) : 0;
-  }
+  if (status === EVENT_STATUS.DRAFT || status === EVENT_STATUS.READY) return 0;
   if (status === EVENT_STATUS.PAUSED) {
-    return this.pausedAt
-      ? Math.max(0, this.endTime - this.pausedAt)
+    return this.pausedAt && this.endTime
+      ? Math.max(0, new Date(this.endTime).getTime() - new Date(this.pausedAt).getTime())
       : this.endTime
-        ? Math.max(0, this.endTime - new Date())
+        ? Math.max(0, new Date(this.endTime).getTime() - Date.now())
         : 0;
   }
-  return this.endTime ? Math.max(0, this.endTime - new Date()) : 0;
+  return this.endTime ? Math.max(0, new Date(this.endTime).getTime() - Date.now()) : 0;
 };
 
 module.exports = mongoose.model("Event", eventSchema);
