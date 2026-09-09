@@ -1,4 +1,4 @@
-const { Team, Clue, QRCode, QRScan, Submission, SideQuest, TeamClueAssignment, AuditLog, ProcessedOperation } = require("../models");
+const { Team, Event, Clue, QRCode, QRScan, Submission, SideQuest, TeamClueAssignment, AuditLog, ProcessedOperation } = require("../models");
 const { QR_TYPE, TEAM_STATUS, SCORE_TRANSACTION_TYPE } = require("../utils/constants");
 const { normalizeAnswer, buildAcceptedList } = require("../utils/answerNormalizer");
 const eventService = require("./eventService");
