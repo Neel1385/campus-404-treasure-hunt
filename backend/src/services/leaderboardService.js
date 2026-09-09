@@ -39,9 +39,12 @@ async function getLeaderboard(eventId) {
     return new Date(a.createdAt) - new Date(b.createdAt);
   });
 
-  const totalClues = await Clue.countDocuments({ ...(eventId ? { eventId } : {}), active: true });
+  const { TeamClueAssignment } = require("../models");
+  const defaultTotalClues = await Clue.countDocuments({ ...(eventId ? { eventId } : {}), active: true });
 
-  return sorted.map((team, index) => {
+  const result = [];
+  for (let index = 0; index < sorted.length; index++) {
+    const team = sorted[index];
     const start = team.startTime ? new Date(team.startTime) : new Date(team.createdAt);
     const end = team.endTime ? new Date(team.endTime) : null;
     let completionTimeMs = 0;
@@ -51,14 +54,17 @@ async function getLeaderboard(eventId) {
       completionTimeMs = Math.max(0, Date.now() - start.getTime());
     }
 
-    return {
+    const teamAssignmentsCount = await TeamClueAssignment.countDocuments({ eventId: team.eventId, teamId: team._id });
+    const totalLevels = teamAssignmentsCount > 0 ? teamAssignmentsCount : defaultTotalClues;
+
+    result.push({
       rank: index + 1,
       id: team._id,
       teamName: team.teamName,
       teamId: team.teamId,
       points: team.points,
       currentLevel: team.currentLevel || team.currentClue || 1,
-      totalLevels: totalClues,
+      totalLevels,
       progress: (team.solvedClues || []).length,
       solvedCluesCount: (team.solvedClues || []).length,
       status: team.status,
@@ -73,8 +79,10 @@ async function getLeaderboard(eventId) {
       treasureCodeSolvedAt: team.treasureCodeSolvedAt || null,
       isFirstWinner: !!team.isFirstWinner || (firstWinnerInfo && String(firstWinnerInfo.firstWinnerTeamId) === String(team._id)),
       firstWinnerInfo,
-    };
-  });
+    });
+  }
+
+  return result;
 }
 
 async function getEventLeaderboard(eventId) {

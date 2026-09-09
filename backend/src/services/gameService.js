@@ -453,15 +453,20 @@ async function processQRScan(team, rawQrId, event) {
         _id: { $nin: completedQuestIds }
       });
 
+      const totalTeamAssignments = await TeamClueAssignment.countDocuments({ eventId: event._id, teamId: team._id });
       const nextAssignment = await TeamClueAssignment.findOne({
         eventId: event._id,
         teamId: team._id,
         sequenceNumber: team.currentLevel + 1,
       }).populate("clueId");
 
-      const nextClueByNumber = await Clue.findOne({ eventId: event._id, clueNumber: team.currentClue + 1, active: true });
-
-      const isFinalStep = clue.isFinal || (nextAssignment ? false : !nextClueByNumber);
+      let isFinalStep = false;
+      if (totalTeamAssignments > 0) {
+        isFinalStep = clue.isFinal || !nextAssignment || team.currentLevel >= totalTeamAssignments;
+      } else {
+        const nextClueByNumber = await Clue.findOne({ eventId: event._id, clueNumber: team.currentClue + 1, active: true });
+        isFinalStep = clue.isFinal || !nextClueByNumber;
+      }
 
       if (isFinalStep) {
         team.status = TEAM_STATUS.COMPLETED;
@@ -726,15 +731,19 @@ async function handleCorrectAnswer(team, clue, event) {
     pointsEarned,
   });
 
-  const nextAssignment = await TeamClueAssignment.findOne({
-    eventId: event._id,
-    teamId: team._id,
-    sequenceNumber: team.currentLevel + 1,
-  });
-
-  const nextClueByNumber = await Clue.findOne({ eventId: event._id, clueNumber: team.currentClue + 1, active: true });
-
-  const isFinalStep = clue.isFinal || (nextAssignment ? false : !nextClueByNumber);
+  const totalTeamAssignments = await TeamClueAssignment.countDocuments({ eventId: event._id, teamId: team._id });
+  let isFinalStep = false;
+  if (totalTeamAssignments > 0) {
+    const nextAssignment = await TeamClueAssignment.findOne({
+      eventId: event._id,
+      teamId: team._id,
+      sequenceNumber: team.currentLevel + 1,
+    });
+    isFinalStep = clue.isFinal || !nextAssignment || team.currentLevel >= totalTeamAssignments;
+  } else {
+    const nextClueByNumber = await Clue.findOne({ eventId: event._id, clueNumber: team.currentClue + 1, active: true });
+    isFinalStep = clue.isFinal || !nextClueByNumber;
+  }
 
   if (isFinalStep) {
     team.status = TEAM_STATUS.COMPLETED;

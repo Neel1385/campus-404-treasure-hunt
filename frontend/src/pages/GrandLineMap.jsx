@@ -115,8 +115,8 @@ export default function GrandLineMap() {
                   const solved = solvedClues.find((s) => s.clueNumber === clueObj.clueNumber || s.clueNumber === level);
 
                   const icon = item.isFinal || level === totalSteps ? "🏆" : ISLAND_ICONS[level] || "🏝️";
-                  // Hide map title / checkpoint name until team reaches / completes the station via correct QR scan
-                  const displayName = isLocked ? "🔒 Uncharted Station" : (clueObj.checkpointName || clueObj.title || `Island Step ${level}`);
+                  // Hide map station title / checkpoint name until team completes/solves the station
+                  const displayName = isCompleted ? (clueObj.checkpointName || clueObj.title || `Station Step ${level}`) : `🔒 Station Step ${level}`;
 
                   return (
                     <div key={item._id || level} style={{ position: "relative" }}>

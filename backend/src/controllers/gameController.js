@@ -20,6 +20,10 @@ const scan = asyncHandler(async (req, res) => {
 const currentClue = asyncHandler(async (req, res) => {
   const team = await Team.findById(req.team._id);
 
+  if (team.status === "completed" || team.status === "COMPLETED") {
+    return success(res, { clue: null, currentLevel: team.currentLevel, completed: true, message: "All clues completed!" }, "Mission complete");
+  }
+
   let clue = null;
   const assignment = await TeamClueAssignment.findOne({
     eventId: team.eventId,

@@ -2,7 +2,7 @@ import { lazy, Suspense } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import ErrorBoundary from "./components/ErrorBoundary.jsx";
 import { useAuth } from "./auth.jsx";
-import { EventProvider } from "./EventContext.jsx";
+import { EventProvider, useEvent } from "./EventContext.jsx";
 import Sidebar from "./Sidebar.jsx";
 import Home from "./pages/Home.jsx";
 import Register from "./pages/Register.jsx";
@@ -27,6 +27,31 @@ function RequirePlayer({ children }) {
   return children;
 }
 
+function RequireLiveEvent({ children }) {
+  const { currentEvent, loading } = useEvent();
+
+  if (loading) {
+    return (
+      <div className="container narrow">
+        <p className="muted" style={{ textAlign: "center", marginTop: 60 }}>Checking hunt status...</p>
+      </div>
+    );
+  }
+
+  const isLive = currentEvent && (currentEvent.status === "RUNNING" || currentEvent.status === "ACTIVE");
+  const isTimeUp = currentEvent && currentEvent.remainingMs != null && currentEvent.remainingMs <= 0;
+
+  if (!isLive || isTimeUp) {
+    const reason = isTimeUp
+      ? "⏰ The hunt timer has expired and the event has concluded. Access to game features is locked."
+      : `⏸️ The event is currently ${currentEvent?.status || "INACTIVE"}. Access to game features is disabled.`;
+
+    return <Navigate to="/" replace state={{ eventNotice: reason }} />;
+  }
+
+  return children;
+}
+
 export default function App() {
   const location = useLocation();
   const isAdmin = location.pathname.startsWith("/admin");
@@ -43,9 +68,11 @@ export default function App() {
           path="/scan"
           element={
             <RequirePlayer>
-              <Lazy>
-                <Scan />
-              </Lazy>
+              <RequireLiveEvent>
+                <Lazy>
+                  <Scan />
+                </Lazy>
+              </RequireLiveEvent>
             </RequirePlayer>
           }
         />
@@ -53,25 +80,29 @@ export default function App() {
           path="/scan/:qrId"
           element={
             <RequirePlayer>
-              <Lazy>
-                <Scan />
-              </Lazy>
+              <RequireLiveEvent>
+                <Lazy>
+                  <Scan />
+                </Lazy>
+              </RequireLiveEvent>
             </RequirePlayer>
           }
         />
         <Route path="/admin/login" element={<AdminLogin />} />
         <Route path="/admin" element={<Admin />} />
         <Route path="/map" element={
-          <RequirePlayer><LevelMap /></RequirePlayer>
+          <RequirePlayer><RequireLiveEvent><LevelMap /></RequireLiveEvent></RequirePlayer>
         } />
         <Route path="/bounty-history" element={
-          <RequirePlayer><ScoreHistory /></RequirePlayer>
+          <RequirePlayer><RequireLiveEvent><ScoreHistory /></RequireLiveEvent></RequirePlayer>
         } />
         <Route
           path="/dashboard"
           element={
             <RequirePlayer>
-              <Dashboard />
+              <RequireLiveEvent>
+                <Dashboard />
+              </RequireLiveEvent>
             </RequirePlayer>
           }
         />

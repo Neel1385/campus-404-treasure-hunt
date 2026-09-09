@@ -261,8 +261,10 @@ export default function Dashboard() {
   };
 
   const teamData = me?.team || team;
-  const isComplete = teamData?.status === "completed";
+  const isComplete = teamData?.status === "completed" || teamData?.status === "COMPLETED";
+  const isEventInactive = currentEvent?.status === "DRAFT" || currentEvent?.status === "PAUSED" || currentEvent?.status === "ENDED";
   const isTimeUp = (me?.event?.remainingMs != null && me.event.remainingMs <= 0) || me?.event?.status === "ENDED" || currentEvent?.status === "ENDED";
+  const isInputDisabled = busy || isTimeUp || isEventInactive || isComplete;
   const unlocked = !!clue?.unlocked;
   const currentLevel = teamData?.currentLevel || teamData?.currentClue || 1;
   const totalLevels = me?.totalLevels || me?.totalClues || "?";
@@ -426,14 +428,14 @@ export default function Dashboard() {
           {fragments.length > 0 && (
             <form onSubmit={submitFinalSecretCode} className="row" style={{ marginTop: 16 }}>
               <input
-                placeholder="Enter complete treasure code..."
+                placeholder={isInputDisabled ? "Treasure code entry disabled" : "Enter complete treasure code..."}
                 value={secretCodeInput}
                 onChange={(e) => setSecretCodeInput(e.target.value)}
                 style={{ flex: 1, minWidth: 200 }}
-                disabled={isTimeUp}
+                disabled={isInputDisabled}
                 required
               />
-              <button className="btn ok" type="submit" disabled={busy || isTimeUp}>
+              <button className="btn ok" type="submit" disabled={isInputDisabled}>
                 🔓 Unlock Treasure Chest
               </button>
             </form>

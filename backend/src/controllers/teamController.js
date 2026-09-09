@@ -8,7 +8,7 @@ const me = asyncHandler(async (req, res) => {
   const event = await Event.findById(team.eventId) || await Event.findOne({});
 
   const assignments = await TeamClueAssignment.find({ eventId: team.eventId, teamId: team._id });
-  const totalAssignedClues = assignments.length;
+  const totalAssignedClues = assignments.length > 0 ? assignments.length : await Clue.countDocuments({ eventId: team.eventId, active: true });
   const completedCluesCount = (team.solvedClues || []).length;
   const remainingCluesCount = Math.max(0, totalAssignedClues - completedCluesCount);
   const rank = await scoreService.getTeamRank(req.team._id);

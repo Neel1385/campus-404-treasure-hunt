@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
 
@@ -29,6 +29,8 @@ function fmtMs(ms) {
 
 export default function Home() {
   const { isLoggedIn } = useAuth();
+  const location = useLocation();
+  const notice = location.state?.eventNotice;
   const [event, setEvent] = useState(null);
   const [error, setError] = useState("");
 
@@ -78,6 +80,11 @@ export default function Home() {
       </div>
 
       <div className="container">
+        {notice && (
+          <div className="alert warn animate-fade-in" style={{ padding: "16px 20px", marginBottom: 20, textAlign: "center", border: "2px solid var(--gold)" }}>
+            <h3 style={{ margin: 0, color: "var(--gold)" }}>{notice}</h3>
+          </div>
+        )}
         {error && <div className="alert error">{error}</div>}
 
         {/* Event status */}
