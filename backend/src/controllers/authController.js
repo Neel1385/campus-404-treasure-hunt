@@ -1,5 +1,5 @@
 const jwt = require("jsonwebtoken");
-const { Team, Event } = require("../models");
+const { Team, Event, TeamClueAssignment } = require("../models");
 const { jwtSecret, jwtExpiresIn } = require("../config/env");
 const { success, ApiError } = require("../utils/ApiResponse");
 const asyncHandler = require("../utils/asyncHandler");
@@ -100,19 +100,8 @@ const login = asyncHandler(async (req, res) => {
 
   const text = String(identifier).trim();
 
-  // Explicitly reject admin accounts attempting to log in via player login endpoint
-  const adminCheck = await Team.findOne({
-    $or: [{ teamId: text.toUpperCase() }, { teamName: text }, { email: text.toLowerCase() }],
-    role: "admin",
-  }).select("+passwordHash");
-
-  if (adminCheck && (await adminCheck.comparePassword(password))) {
-    throw new ApiError("Admin accounts must log in through the Admin Portal (/admin/login).", 403, "ADMIN_LOGIN_DISALLOWED");
-  }
-
   const query = {
-    role: "player",
-    $or: [{ teamId: text.toUpperCase() }, { teamName: text }],
+    $or: [{ teamId: text.toUpperCase() }, { teamName: text }, { email: text.toLowerCase() }],
   };
   if (eventId) {
     query.eventId = eventId;
@@ -124,18 +113,21 @@ const login = asyncHandler(async (req, res) => {
     throw new ApiError("Invalid credentials.", 401, "INVALID_CREDENTIALS");
   }
 
+  if (team.role === "admin") {
+    throw new ApiError("Admin accounts must log in through the Admin Portal (/admin/login).", 403, "ADMIN_LOGIN_DISALLOWED");
+  }
+
   if (team.status === "disabled") {
     throw new ApiError("Your team has been disabled. Contact an organizer.", 403, "TEAM_DISABLED");
   }
 
   // Check if clues have been assigned to the team before allowing login
-  const { TeamClueAssignment } = require("../models");
-  const assignedCount = await TeamClueAssignment.countDocuments({
+  const hasAssignedClues = await TeamClueAssignment.exists({
     eventId: team.eventId,
     teamId: team._id,
   });
 
-  if (assignedCount === 0) {
+  if (!hasAssignedClues) {
     throw new ApiError("No clues have been assigned to your team yet. Please wait for the organizer.", 403, "NO_CLUES_ASSIGNED");
   }
 

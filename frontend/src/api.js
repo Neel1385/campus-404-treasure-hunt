@@ -61,7 +61,7 @@ export function readCurrentEventId() {
   }
 }
 
-async function http(path, { method = "GET", body, token } = {}) {
+async function http(path, { method = "GET", body, token, timeoutMs = 15000 } = {}) {
   const headers = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
 
@@ -72,11 +72,29 @@ async function http(path, { method = "GET", body, token } = {}) {
     fullPath = `${path}${separator}eventId=${currentEventId}`;
   }
 
-  const res = await fetch(`${API_BASE}${fullPath}`, {
-    method,
-    headers,
-    body: body === undefined ? undefined : JSON.stringify(body),
-  });
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+  let res;
+  try {
+    res = await fetch(`${API_BASE}${fullPath}`, {
+      method,
+      headers,
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: controller.signal,
+    });
+  } catch (err) {
+    clearTimeout(timeoutId);
+    if (err.name === "AbortError") {
+      const timeoutErr = new Error("Request timed out. Please check your connection and try again.");
+      timeoutErr.code = "TIMEOUT";
+      timeoutErr.status = 408;
+      throw timeoutErr;
+    }
+    throw err;
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   let json = {};
   try {

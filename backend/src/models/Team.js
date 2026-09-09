@@ -76,6 +76,9 @@ const teamSchema = new mongoose.Schema(
 
 teamSchema.index({ eventId: 1, teamId: 1 }, { unique: true });
 teamSchema.index({ eventId: 1, teamName: 1 }, { unique: true });
+teamSchema.index({ teamId: 1 });
+teamSchema.index({ teamName: 1 });
+teamSchema.index({ email: 1 }, { sparse: true });
 
 teamSchema.pre("save", async function (next) {
   if (!this.isModified("passwordHash")) return next();

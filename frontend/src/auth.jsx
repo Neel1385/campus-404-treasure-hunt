@@ -6,17 +6,18 @@ const AuthContext = createContext(null);
 export function AuthProvider({ children }) {
   const [auth, setAuth] = useState(() => readPlayer());
 
-  // On mount, refresh the stored token against the server (silently).
+  // On initial mount, refresh the stored token against the server (silently).
   useEffect(() => {
-    if (!auth) return;
+    const stored = readPlayer();
+    if (!stored?.token) return;
     api
-      .get("/auth/me", { token: auth.token })
-      .then((data) => setAuth({ token: auth.token, team: data.team }))
+      .get("/auth/me", { token: stored.token })
+      .then((data) => setAuth({ token: stored.token, team: data.team }))
       .catch(() => {
         clearPlayer();
         setAuth(null);
       });
-  }, [auth && auth.token]);
+  }, []);
 
   const login = useCallback(async (identifier, password) => {
     const data = await api.post("/auth/login", { identifier, password });
