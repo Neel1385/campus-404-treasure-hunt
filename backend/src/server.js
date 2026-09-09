@@ -36,7 +36,7 @@ const corsOrigin = !clientOrigins || clientOrigins.includes("*")
     };
 
 app.use(cors({
-  origin: corsOrigin,
+  origin: "*",
   methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
   preflightContinue: false,
   optionsSuccessStatus: 204,
