@@ -316,6 +316,31 @@ const listQRCodes = asyncHandler(async (req, res) => {
   return success(res, { qrcodes: qrs, frontendUrl }, "QR codes");
 });
 
+const downloadQRCodesZip = asyncHandler(async (req, res) => {
+  const eventId = await resolveEventId(req);
+  const qrcode = require("qrcode");
+  const JSZip = require("jszip");
+  const qrs = await QRCode.find({ eventId }).populate("clueId", "clueNumber title");
+
+  const zip = new JSZip();
+  if (qrs.length === 0) {
+    zip.file("README.txt", "No QR codes created for this event yet.");
+  } else {
+    for (const qr of qrs) {
+      const url = qrService.qrUrl(qr.qrId);
+      const dataDataUrl = await qrcode.toDataURL(url, { errorCorrectionLevel: "H", margin: 2, width: 300 });
+      const base64Data = dataDataUrl.replace(/^data:image\/png;base64,/, "");
+      const cleanName = (qr.checkpointName || (qr.clueId ? qr.clueId.title : "QR")).replace(/[^a-zA-Z0-9_-]/g, "_");
+      zip.file(`QR_${qr.qrId}_${qr.type}_${cleanName}.png`, base64Data, { base64: true });
+    }
+  }
+
+  const zipBuffer = await zip.generateAsync({ type: "nodebuffer" });
+  res.setHeader("Content-Type", "application/zip");
+  res.setHeader("Content-Disposition", `attachment; filename="qrcodes_${eventId}.zip"`);
+  res.send(zipBuffer);
+});
+
 const bulkCreateQRCodes = asyncHandler(async (req, res) => {
   const eventId = await resolveEventId(req);
   const { type = "DUMMY", count = 5, points = 0, checkpointPrefix = "Checkpoint" } = req.body || {};
@@ -545,6 +570,7 @@ module.exports = {
   updateClue,
   deleteClue,
   listQRCodes,
+  downloadQRCodesZip,
   createQRCode,
   toggleQR,
   generateQR,

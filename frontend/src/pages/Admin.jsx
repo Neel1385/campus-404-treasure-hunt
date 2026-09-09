@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { Link, Navigate } from "react-router-dom";
-import { api, readAdmin, clearAdmin } from "../api.js";
+import { api, readAdmin, clearAdmin, getApiUrl } from "../api.js";
 
 const STATUS_LABEL = {
   DRAFT: "Draft",
@@ -1695,9 +1695,14 @@ function QRCodes({ token, run, flash, eventId }) {
             onClick={async () => {
               try {
                 flash("Downloading QR Images ZIP...");
-                const response = await fetch(`/api/events/${eventId}/qrcodes/zip`, {
+                let response = await fetch(getApiUrl(`/events/${eventId}/qrcodes/zip`), {
                   headers: { Authorization: `Bearer ${token}` }
                 });
+                if (!response.ok) {
+                  response = await fetch(getApiUrl(`/admin/qrcodes/zip?eventId=${eventId}`), {
+                    headers: { Authorization: `Bearer ${token}` }
+                  });
+                }
                 if (!response.ok) throw new Error("Failed to generate ZIP archive.");
                 const blob = await response.blob();
                 const url = window.URL.createObjectURL(blob);

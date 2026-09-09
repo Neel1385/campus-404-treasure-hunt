@@ -1,7 +1,12 @@
 // Thin API client. All responses use the { success, message, data } envelope.
 // On error it throws an Error with .code and .status attached.
 
-const API_BASE = (import.meta.env.VITE_API_URL || "/api").replace(/\/$/, "");
+export const API_BASE = (import.meta.env.VITE_API_URL || "/api").replace(/\/$/, "");
+
+export function getApiUrl(path) {
+  const cleanPath = path.startsWith("/") ? path : `/${path}`;
+  return `${API_BASE}${cleanPath}`;
+}
 
 export const PLAYER_KEY = "campus404:player";
 export const ADMIN_KEY = "campus404:admin";
