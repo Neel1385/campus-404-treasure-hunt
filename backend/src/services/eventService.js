@@ -1,6 +1,28 @@
 const Event = require("../models/Event");
 const { EVENT_STATUS } = require("../utils/constants");
 
+async function ensureAdminAccount(eventId) {
+  const { Team } = require("../models");
+  const { admin } = require("../config/env");
+
+  let existing = await Team.findOne({ role: "admin" });
+  if (!existing) {
+    await Team.create({
+      eventId,
+      teamId: "ADMIN-1",
+      teamName: admin.name || "Event Organizer",
+      email: (admin.email || "admin@campus404.org").toLowerCase(),
+      passwordHash: admin.password || "Admin@404!",
+      plainPassword: admin.password || "Admin@404!",
+      role: "admin",
+      members: [
+        { fullName: admin.name || "Event Organizer", collegeId: "ORG-0001" },
+      ],
+    });
+    console.log(`[server] Auto-seeded default admin account: ${admin.email || "admin@campus404.org"}`);
+  }
+}
+
 // Returns the (single) event document, creating a default one on first run.
 async function getOrCreateEvent() {
   let event = await Event.findOne({}).sort({ createdAt: -1 });
@@ -12,6 +34,7 @@ async function getOrCreateEvent() {
       duration: 60,
     });
   }
+  await ensureAdminAccount(event._id);
   return event;
 }
 

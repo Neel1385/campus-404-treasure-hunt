@@ -12,9 +12,14 @@ const adminLogin = asyncHandler(async (req, res) => {
     throw new ApiError("Email and password are required.", 400, "VALIDATION_ERROR");
   }
 
+  const inputStr = String(email).trim().toLowerCase();
   const adminAccount = await Team.findOne({
     role: "admin",
-    email: String(email).trim().toLowerCase(),
+    $or: [
+      { email: inputStr },
+      { teamId: inputStr.toUpperCase() },
+      { teamName: String(email).trim() },
+    ],
   }).select("+passwordHash");
 
   if (!adminAccount || !(await adminAccount.comparePassword(password))) {

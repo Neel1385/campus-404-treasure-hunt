@@ -20,8 +20,6 @@ const eventRoutes = require("./routes/eventRoutes");
 
 const app = express();
 
-app.set("trust proxy", 1);
-
 app.use(helmet({
   crossOriginResourcePolicy: false,
   crossOriginEmbedderPolicy: false,
@@ -30,12 +28,12 @@ app.use(helmet({
 const corsOrigin = !clientOrigins || clientOrigins.includes("*")
   ? "*"
   : (origin, callback) => {
-    if (!origin || clientOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error(`CORS policy blocked request from origin ${origin}`));
-    }
-  };
+      if (!origin || clientOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`CORS policy blocked request from origin ${origin}`));
+      }
+    };
 
 app.use(cors({
   origin: corsOrigin,
