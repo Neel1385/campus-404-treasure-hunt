@@ -38,13 +38,19 @@ function RequireLiveEvent({ children }) {
     );
   }
 
-  const isLive = currentEvent && (currentEvent.status === "RUNNING" || currentEvent.status === "ACTIVE");
+  const status = currentEvent?.status || "INACTIVE";
+  const isLive = currentEvent && (status === "RUNNING" || status === "ACTIVE");
   const isTimeUp = currentEvent && currentEvent.remainingMs != null && currentEvent.remainingMs <= 0;
 
   if (!isLive || isTimeUp) {
-    const reason = isTimeUp
-      ? "⏰ The hunt timer has expired and the event has concluded. Access to game features is locked."
-      : `⏸️ The event is currently ${currentEvent?.status || "INACTIVE"}. Access to game features is disabled.`;
+    let reason = `⏸️ The event is currently ${status}. Access to game features is disabled.`;
+    if (status === "PAUSED") {
+      reason = "⏸️ The event has been PAUSED by the organizer. Access to game features is currently locked.";
+    } else if (status === "ENDED" || isTimeUp) {
+      reason = "⏰ The hunt timer has expired and the event is finished. Access to game features is locked.";
+    } else if (status === "DRAFT" || status === "READY" || status === "NOT_STARTED") {
+      reason = "📝 The event has not started yet. Access to game features will unlock when the organizer starts the hunt.";
+    }
 
     return <Navigate to="/" replace state={{ eventNotice: reason }} />;
   }

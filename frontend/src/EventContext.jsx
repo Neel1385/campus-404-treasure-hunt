@@ -27,36 +27,48 @@ export function EventProvider({ children }) {
     if (theme.accentColor) root.style.setProperty("--gold", theme.accentColor);
   };
 
-  const selectEvent = (event) => {
-    setCurrentEvent(event);
-    if (event) {
-      localStorage.setItem(EVENT_KEY, JSON.stringify(event));
-      if (event.theme) applyTheme(event.theme);
-    } else {
-      localStorage.removeItem(EVENT_KEY);
-    }
-  };
+  const selectEvent = useCallback((event) => {
+    setCurrentEvent((prev) => {
+      if (prev && event && prev._id === event._id && prev.status === event.status && prev.remainingMs === event.remainingMs && prev.endTime === event.endTime) {
+        return prev;
+      }
+      if (event) {
+        localStorage.setItem(EVENT_KEY, JSON.stringify(event));
+        if (event.theme) applyTheme(event.theme);
+      } else {
+        localStorage.removeItem(EVENT_KEY);
+      }
+      return event;
+    });
+  }, []);
 
-  const loadEvents = async () => {
+  const loadEvents = useCallback(async () => {
     try {
       const res = await api.get("/events");
       const list = Array.isArray(res) ? res : res.data || [];
       if (list.length > 0) {
         setEventsList(list);
-        if (!currentEvent) {
-          selectEvent(list[0]);
-        }
+        const stored = (() => {
+          try { return JSON.parse(localStorage.getItem(EVENT_KEY) || "null"); } catch { return null; }
+        })();
+        const targetId = stored ? stored._id : list[0]._id;
+        const updated = list.find((e) => e._id === targetId) || list[0];
+        selectEvent(updated);
       }
     } catch (err) {
       console.error("Failed to fetch events", err);
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectEvent]);
 
   useEffect(() => {
     loadEvents();
-  }, []);
+    const interval = setInterval(() => {
+      loadEvents();
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [loadEvents]);
 
   return (
     <EventContext.Provider value={{ currentEvent, eventsList, selectEvent, loadEvents, loading }}>

@@ -110,7 +110,7 @@ export default function Leaderboard() {
                     <td className="mono">
                       {ISLAND_ICONS[t.currentLevel || 1] || "🏝️"} {t.currentLevel || 1}
                     </td>
-                    <td className="muted">{t.progress} decoded</td>
+                    <td className="muted">{t.progress} / {t.totalLevels || "?"} clues decoded</td>
                     <td className="muted mono">{t.completed ? fmtTime(t.completionTime) : "—"}</td>
                     <td className="mono" style={{ color: "var(--gold)", fontWeight: 700 }}>
                       💰 {t.points}

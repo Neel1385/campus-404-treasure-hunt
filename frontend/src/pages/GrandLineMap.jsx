@@ -116,7 +116,7 @@ export default function GrandLineMap() {
 
                   const icon = item.isFinal || level === totalSteps ? "🏆" : ISLAND_ICONS[level] || "🏝️";
                   // Hide map station title / checkpoint name until team completes/solves the station
-                  const displayName = isCompleted ? (clueObj.checkpointName || clueObj.title || `Station Step ${level}`) : `🔒 Station Step ${level}`;
+                  const displayName = isCompleted ? (clueObj.checkpointName || clueObj.title || `Station Step ${level}`) : "🔒 Uncharted Station";
 
                   return (
                     <div key={item._id || level} style={{ position: "relative" }}>
@@ -216,7 +216,7 @@ export default function GrandLineMap() {
         {selectedNode && (
           <div className="card animate-fade-in" style={{ marginBottom: 24, background: "var(--bg-2)", borderLeft: "4px solid var(--gold)" }}>
             <div className="spread">
-              <h3 style={{ margin: 0, color: "var(--gold)" }}>📍 Island Log Details: {selectedNode.name}</h3>
+              <h3 style={{ margin: 0, color: "var(--gold)" }}>📍 Island Log Details: {selectedNode.isCompleted ? selectedNode.name : "🔒 Uncharted Station"}</h3>
               <button className="btn small ghost" onClick={() => setSelectedNode(null)}>Dismiss</button>
             </div>
             <div style={{ marginTop: 12, fontSize: 14 }}>

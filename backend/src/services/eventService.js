@@ -130,15 +130,15 @@ async function setEventStatus(adminOrId, status, eventIdArg, noteArg) {
   switch (status) {
     case EVENT_STATUS.RUNNING:
     case EVENT_STATUS.ACTIVE: {
-      if (event.status === EVENT_STATUS.PAUSED && event.pausedAt) {
+      const isPastEnd = event.endTime && now >= new Date(event.endTime);
+      if (event.status === EVENT_STATUS.PAUSED && event.pausedAt && !isPastEnd) {
         const pausedMs = now - event.pausedAt;
         if (event.endTime) event.endTime = new Date(event.endTime.getTime() + pausedMs);
         event.pausedAt = undefined;
       } else {
-        if (!event.startTime) event.startTime = now;
-        if (!event.endTime) {
-          event.endTime = new Date(now.getTime() + event.duration * 60 * 1000);
-        }
+        event.startTime = now;
+        event.endTime = new Date(now.getTime() + event.duration * 60 * 1000);
+        event.pausedAt = undefined;
       }
       event.status = EVENT_STATUS.RUNNING;
       break;
