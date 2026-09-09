@@ -4,7 +4,7 @@ const helmet = require("helmet");
 const cors = require("cors");
 const { initSocket } = require("./socket");
 const { connectDB } = require("./config/db");
-const { env, port, clientUrl, mongoUri } = require("./config/env");
+const { env, port, clientUrl, clientOrigins, mongoUri } = require("./config/env");
 const { standardLimiter } = require("./middleware/rateLimiter");
 const { errorHandler, notFound } = require("./middleware/errorHandler");
 
@@ -24,8 +24,19 @@ app.use(helmet({
   crossOriginResourcePolicy: false,
   crossOriginEmbedderPolicy: false,
 }));
+
+const corsOrigin = !clientOrigins || clientOrigins.includes("*")
+  ? "*"
+  : (origin, callback) => {
+      if (!origin || clientOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error(`CORS policy blocked request from origin ${origin}`));
+      }
+    };
+
 app.use(cors({
-  origin: "*",
+  origin: corsOrigin,
   methods: "GET,HEAD,PUT,PATCH,POST,DELETE",
   preflightContinue: false,
   optionsSuccessStatus: 204,

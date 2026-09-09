@@ -1,7 +1,15 @@
 // Thin API client. All responses use the { success, message, data } envelope.
 // On error it throws an Error with .code and .status attached.
 
-export const API_BASE = (import.meta.env.VITE_API_URL || "/api").replace(/\/$/, "");
+function computeApiBase() {
+  const raw = import.meta.env.VITE_API_URL;
+  if (!raw) return "/api";
+  const trimmed = raw.trim().replace(/\/$/, "");
+  if (trimmed.endsWith("/api")) return trimmed;
+  return `${trimmed}/api`;
+}
+
+export const API_BASE = computeApiBase();
 
 export function getApiUrl(path) {
   const cleanPath = path.startsWith("/") ? path : `/${path}`;

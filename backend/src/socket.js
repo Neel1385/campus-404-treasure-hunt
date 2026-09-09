@@ -1,9 +1,11 @@
 const { Server } = require("socket.io");
+const { clientOrigins } = require("./config/env");
 
 let io = null;
 
 function initSocket(server) {
-  io = new Server(server, { cors: { origin: "*" } });
+  const allowedOrigin = (!clientOrigins || clientOrigins.includes("*")) ? "*" : clientOrigins;
+  io = new Server(server, { cors: { origin: allowedOrigin } });
 
   io.on("connection", (socket) => {
     socket.on("event:join", ({ eventId }) => {
