@@ -21,10 +21,38 @@ router.get("/", async (req, res, next) => {
 router.get("/:eventId/clue-assignments", protect, adminOnly, enforceEventIsolation, async (req, res, next) => {
   try {
     const assignments = await TeamClueAssignment.find({ eventId: req.params.eventId })
-      .populate("teamId", "teamId teamName")
-      .populate("clueId", "clueNumber title checkpointName points")
+      .populate("teamId", "teamId teamName currentLevel currentClue solvedClues status")
+      .populate("clueId", "clueNumber title description checkpointName points isFinal")
       .sort({ sequenceNumber: 1 });
-    res.json({ success: true, data: assignments });
+
+    const quests = await SideQuest.find({ eventId: req.params.eventId });
+
+    const enriched = assignments.map((a) => {
+      const obj = a.toObject();
+      const teamLevel = a.teamId?.currentLevel || a.teamId?.currentClue || 1;
+      const isTeamCompleted = a.teamId?.status === "COMPLETED";
+      const isCompleted = isTeamCompleted || a.sequenceNumber < teamLevel;
+      const isCurrent = !isTeamCompleted && a.sequenceNumber === teamLevel;
+
+      const questIndex = (a.sequenceNumber - 1) % (quests.length || 1);
+      const assignedQuest = quests.length > 0 ? quests[questIndex] : null;
+
+      return {
+        ...obj,
+        isCompletedStep: isCompleted,
+        isCurrentStep: isCurrent,
+        sideQuest: assignedQuest ? {
+          _id: assignedQuest._id,
+          title: assignedQuest.title,
+          description: assignedQuest.description,
+          points: assignedQuest.points,
+          answer: assignedQuest.answer,
+          secretCodeReward: assignedQuest.secretCodeReward,
+        } : null,
+      };
+    });
+
+    res.json({ success: true, data: enriched });
   } catch (err) {
     next(err);
   }
@@ -269,12 +297,17 @@ router.get("/:eventId/qrcodes/zip", protect, adminOnly, enforceEventIsolation, a
     const qrs = await QRCode.find({ eventId: req.params.eventId }).populate("clueId", "clueNumber title");
 
     const zip = new JSZip();
-    for (const qr of qrs) {
-      const url = qrService.qrUrl(qr.qrId);
-      const dataDataUrl = await qrcode.toDataURL(url, { errorCorrectionLevel: "H", margin: 2, width: 300 });
-      const base64Data = dataDataUrl.replace(/^data:image\/png;base64,/, "");
-      const cleanName = (qr.checkpointName || (qr.clueId ? qr.clueId.title : "QR")).replace(/[^a-zA-Z0-9_-]/g, "_");
-      zip.file(`QR_${qr.qrId}_${qr.type}_${cleanName}.png`, base64Data, { base64: true });
+    if (qrs.length === 0) {
+      // Add a placeholder file if no QRs exist yet
+      zip.file("README.txt", "No QR codes created for this event yet.");
+    } else {
+      for (const qr of qrs) {
+        const url = qrService.qrUrl(qr.qrId);
+        const dataDataUrl = await qrcode.toDataURL(url, { errorCorrectionLevel: "H", margin: 2, width: 300 });
+        const base64Data = dataDataUrl.replace(/^data:image\/png;base64,/, "");
+        const cleanName = (qr.checkpointName || (qr.clueId ? qr.clueId.title : "QR")).replace(/[^a-zA-Z0-9_-]/g, "_");
+        zip.file(`QR_${qr.qrId}_${qr.type}_${cleanName}.png`, base64Data, { base64: true });
+      }
     }
 
     const zipBuffer = await zip.generateAsync({ type: "nodebuffer" });

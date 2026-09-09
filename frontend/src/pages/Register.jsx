@@ -77,7 +77,7 @@ export default function Register() {
   return (
     <div className="container narrow">
       <p className="brand" style={{ marginTop: 24 }}>
-        <Link to="/" style={{ color: "inherit" }}>🏴‍☠️ CAMPUS 404</Link>
+        <Link to="/" style={{ color: "inherit" }}>🏴‍☠️ The Lost Treasure</Link>
       </p>
 
       <div className="hero" style={{ padding: "24px 0 16px" }}>

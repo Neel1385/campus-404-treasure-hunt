@@ -113,29 +113,73 @@ async function tryFinalSecretCode(eventId, team, inputSecretCode) {
     return { success: false, correct: false, message: "Incorrect secret code. Check your side quest code fragments!" };
   }
 
+  const now = new Date();
+  team.treasureCodeSolvedAt = now;
+
+  // Atomic winner claim: only set if firstWinnerTeamId does not exist yet
+  const claimedEvent = await Event.findOneAndUpdate(
+    { _id: eventId, $or: [{ firstWinnerTeamId: { $exists: false } }, { firstWinnerTeamId: null }] },
+    {
+      $set: {
+        firstWinnerTeamId: team._id,
+        firstWinnerTeamName: team.teamName,
+        firstWinnerTimestamp: now,
+      },
+    },
+    { new: true }
+  );
+
+  let isFirstWinner = false;
+  if (claimedEvent && String(claimedEvent.firstWinnerTeamId) === String(team._id)) {
+    isFirstWinner = true;
+    team.isFirstWinner = true;
+  } else if (String(event.firstWinnerTeamId) === String(team._id)) {
+    isFirstWinner = true;
+    team.isFirstWinner = true;
+  }
+
   const bonusPoints = Number(settings.finalChallengePoints) || 100;
   if (bonusPoints > 0) {
     const { newPoints } = await scoreService.recordTransaction(
       team._id,
       SCORE_TRANSACTION_TYPE.FINAL_CHALLENGE,
       bonusPoints,
-      { eventId, reason: "Physical Final Treasure Chest Unlocked!" }
+      { eventId, reason: isFirstWinner ? "First Winner - Treasure Code Unlocked!" : "Treasure Code Unlocked!" }
     );
     team.points = newPoints;
   }
 
   team.status = TEAM_STATUS.COMPLETED;
-  team.endTime = new Date();
+  team.endTime = team.endTime || now;
   team.finalScore = team.points;
   await team.save();
 
+  await AuditLog.create({
+    eventId,
+    targetType: "Team",
+    targetId: team._id,
+    action: isFirstWinner ? "TREASURE_CODE_FIRST_WINNER" : "TREASURE_CODE_CORRECT",
+    note: isFirstWinner
+      ? `🏆 FIRST WINNER! Team "${team.teamName}" guessed the Treasure Code correctly at ${now.toISOString()}`
+      : `Team "${team.teamName}" guessed the Treasure Code correctly at ${now.toISOString()}`,
+  });
+
   broadcastLeaderboardUpdate(eventId);
-  eventBus.publish(DOMAIN_EVENTS.FINAL_CHALLENGE_COMPLETED, { eventId, teamId: team._id, finalScore: team.finalScore });
+  eventBus.publish(DOMAIN_EVENTS.FINAL_CHALLENGE_COMPLETED, { eventId, teamId: team._id, finalScore: team.finalScore, isFirstWinner, solvedAt: now });
+
+  const winnerInfo = isFirstWinner
+    ? { isFirstWinner: true, firstWinnerTeamName: team.teamName, firstWinnerTimestamp: now }
+    : { isFirstWinner: false, firstWinnerTeamName: claimedEvent?.firstWinnerTeamName || event.firstWinnerTeamName, firstWinnerTimestamp: claimedEvent?.firstWinnerTimestamp || event.firstWinnerTimestamp };
 
   return {
     success: true,
     correct: true,
-    message: `PHYSICAL TREASURE UNLOCKED! +${bonusPoints} Bonus Treasure Bounty!`,
+    isFirstWinner,
+    treasureCodeSolvedAt: now,
+    firstWinnerInfo: winnerInfo,
+    message: isFirstWinner
+      ? `🏆 FIRST WINNER! PHYSICAL TREASURE UNLOCKED! +${bonusPoints} Bonus Treasure Bounty!`
+      : `PHYSICAL TREASURE UNLOCKED! +${bonusPoints} Bonus Treasure Bounty!`,
     totalPoints: team.points,
   };
 }
@@ -350,6 +394,9 @@ async function processQRScan(team, rawQrId, event) {
         return handleWrongScan(team, qrId, qr, clue, event, "Wrong QR, follow the clue and try again.");
       }
 
+      // Reset consecutive wrong scans on correct QR scan
+      team.consecutiveWrongScans = 0;
+
       await QRScan.create({ eventId: event._id, teamId: team._id, qrId, qrType: qr.type, clueId: qr.clueId, correct: true, level: team.currentLevel });
 
       await AuditLog.create({
@@ -521,15 +568,17 @@ async function handleWrongScan(team, qrId, qr, clue, event, message) {
   }
 
   const newWrongScans = (team.wrongScans || 0) + 1;
+  const newConsecutive = (team.consecutiveWrongScans || 0) + 1;
   team.wrongScans = newWrongScans;
+  team.consecutiveWrongScans = newConsecutive;
 
   if (settings.wrongScanBlockingEnabled) {
     const threshold = Number(settings.wrongScanBlockThreshold) || 3;
-    if (newWrongScans >= threshold) {
+    if (newConsecutive >= threshold) {
       team.blocked = true;
-      team.blockReason = `Blocked due to ${newWrongScans} wrong QR scans.`;
+      const durationMins = Number(settings.wrongScanBlockDuration) || 5;
+      team.blockReason = `Blocked due to ${newConsecutive} consecutive wrong QR scans for ${durationMins} minutes.`;
       if (settings.wrongScanBlockStrategy === "TIME" || settings.wrongScanBlockStrategy === "BOTH") {
-        const durationMins = Number(settings.wrongScanBlockDuration) || 5;
         team.blockedUntil = new Date(Date.now() + durationMins * 60 * 1000);
       }
       if (settings.wrongScanBlockStrategy === "SCAN_COUNT" || settings.wrongScanBlockStrategy === "BOTH") {

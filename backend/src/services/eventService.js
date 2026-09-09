@@ -6,7 +6,7 @@ async function getOrCreateEvent() {
   let event = await Event.findOne({}).sort({ createdAt: -1 });
   if (!event) {
     event = await Event.create({
-      name: "CAMPUS 404",
+      name: "The Lost Treasure",
       description: "SCAN. SOLVE. SEARCH. SURVIVE.",
       status: EVENT_STATUS.RUNNING,
       duration: 60,
@@ -16,9 +16,22 @@ async function getOrCreateEvent() {
 }
 
 async function getEventById(eventId) {
-  if (!eventId) return getOrCreateEvent();
-  const event = await Event.findById(eventId);
-  return event || getOrCreateEvent();
+  let event = null;
+  if (eventId) {
+    event = await Event.findById(eventId);
+  }
+  if (!event) {
+    event = await getOrCreateEvent();
+  }
+
+  // Auto-pause if event timer has reached 00:00 while event status is RUNNING/ACTIVE
+  if ((event.status === EVENT_STATUS.RUNNING || event.status === EVENT_STATUS.ACTIVE) && event.endTime && new Date() >= event.endTime) {
+    event.status = EVENT_STATUS.PAUSED;
+    event.pausedAt = event.endTime;
+    await event.save();
+  }
+
+  return event;
 }
 
 // Public, player-facing view.

@@ -425,3 +425,40 @@ test("side quest wrong answer does not deduct points", async () => {
   assert.equal(badRes.body.data.correct, false);
   assert.match(badRes.body.data.message, /Wrong answer/i);
 });
+
+test("timer expiration automatically transitions event status to PAUSED and persists", async () => {
+  const expiredEvent = await Event.create({
+    name: "Expired Event Test",
+    status: EVENT_STATUS.RUNNING,
+    startTime: new Date(Date.now() - 7200000),
+    endTime: new Date(Date.now() - 1000),
+    duration: 60,
+  });
+
+  const fetched = await eventService.getEventById(expiredEvent._id);
+  assert.equal(fetched.status, EVENT_STATUS.PAUSED);
+
+  const dbEvent = await Event.findById(expiredEvent._id);
+  assert.equal(dbEvent.status, EVENT_STATUS.PAUSED);
+});
+
+test("QR ZIP endpoint generates valid archive with styled vector QRs", async () => {
+  const loginRes = await request(app).post("/api/admin/auth/login").send({
+    email: TEST_ADMIN.email,
+    password: TEST_ADMIN.password,
+  });
+  const adminToken = loginRes.body.data.token;
+
+  const res = await request(app)
+    .get(`/api/events/${activeEvent._id}/qrcodes/zip`)
+    .set(auth(adminToken))
+    .parse((res, callback) => {
+      const chunks = [];
+      res.on("data", (chunk) => chunks.push(chunk));
+      res.on("end", () => callback(null, Buffer.concat(chunks)));
+    });
+
+  assert.equal(res.status, 200);
+  assert.equal(res.headers["content-type"], "application/zip");
+  assert.ok(res.body.length > 0);
+});

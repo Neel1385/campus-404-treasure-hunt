@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { Link, Navigate } from "react-router-dom";
-import { api, readAdmin, clearAdmin } from "../api.js";
+import { api, readAdmin, clearAdmin, getApiUrl } from "../api.js";
 
 const STATUS_LABEL = {
   DRAFT: "Draft",
@@ -65,6 +65,7 @@ export default function Admin() {
 
   const navItems = [
     ["overview", "⚓ Overview & Events"],
+    ["leaderboard", "🏆 Live Leaderboard"],
     ["teams", "🏴‍☠️ Teams Control"],
     ["assignments", "🔀 Assigned Clues"],
     ["clues", "📜 Clues & Pool"],
@@ -95,7 +96,7 @@ export default function Admin() {
         <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
           {sidebarOpen ? (
             <Link to="/" style={{ textDecoration: "none", color: "var(--gold, #f59e0b)", fontWeight: 700, fontSize: 16 }}>
-              🏴‍☠️ CAMPUS 404
+              🏴‍☠️ The Lost Treasure
             </Link>
           ) : (
             <span style={{ fontSize: 20 }}>🏴‍☠️</span>
@@ -165,7 +166,7 @@ export default function Admin() {
       {/* Main Admin Content Area */}
       <main style={{ flex: 1, padding: "32px 40px", overflowY: "auto" }}>
         {/* Persistent Global Event Bar */}
-        <div className="card" style={{ marginBottom: 28, padding: "20px 24px", background: "var(--bg-2, #1e293b)", borderLeft: "4px solid var(--gold, #f59e0b)" }}>
+        <div className="card" style={{ marginBottom: 20, padding: "20px 24px", background: "var(--bg-2, #1e293b)", borderLeft: "4px solid var(--gold, #f59e0b)" }}>
           <div className="spread">
             <div className="row" style={{ gap: 12 }}>
               <span style={{ fontSize: 18, fontWeight: 700, color: "var(--gold, #f59e0b)" }}>🎯 Active Event Context:</span>
@@ -190,6 +191,42 @@ export default function Admin() {
           </div>
         </div>
 
+        {/* Event Draft or Paused Prominent Warning Banner */}
+        {(() => {
+          const currentEv = eventsList.find((e) => e._id === selectedEventId);
+          if (!currentEv) return null;
+          const status = currentEv.status;
+          if (status === "DRAFT" || status === "PAUSED") {
+            return (
+              <div
+                className="alert warn animate-fade-in"
+                style={{
+                  marginBottom: 24,
+                  padding: "16px 20px",
+                  background: status === "PAUSED" ? "rgba(245, 158, 11, 0.15)" : "rgba(100, 116, 139, 0.2)",
+                  border: `2px solid ${status === "PAUSED" ? "var(--gold)" : "var(--border)"}`,
+                  borderRadius: 8,
+                }}
+              >
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <span style={{ fontSize: 28 }}>{status === "PAUSED" ? "⏸️" : "📝"}</span>
+                  <div>
+                    <h3 style={{ margin: 0, color: status === "PAUSED" ? "var(--gold)" : "var(--text)" }}>
+                      EVENT STATUS: {STATUS_LABEL[status] || status}
+                    </h3>
+                    <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--text)" }}>
+                      {status === "PAUSED"
+                        ? "The event is currently PAUSED. Players cannot scan QR codes or submit answers until resumed."
+                        : "The event is currently in DRAFT status. QR scanning is disabled for all player teams."}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+          return null;
+        })()}
+
         {error && <div className="alert error" style={{ marginBottom: 16 }}>{error}</div>}
         {notice && <div className="alert success" style={{ marginBottom: 16 }}>{notice}</div>}
 
@@ -200,6 +237,13 @@ export default function Admin() {
             flash={flash}
             selectedEventId={selectedEventId}
             setSelectedEventId={setSelectedEventId}
+          />
+        )}
+        {tab === "leaderboard" && (
+          <LeaderboardTab
+            token={token}
+            run={run}
+            eventId={selectedEventId}
           />
         )}
         {tab === "teams" && <Teams token={token} run={run} flash={flash} eventId={selectedEventId} />}
@@ -283,11 +327,25 @@ function Overview({ token, run, flash, selectedEventId, setSelectedEventId }) {
     loadEvents().catch(() => {});
   };
 
-  const createNewEvent = async () => {
-    const name = window.prompt("Enter new Event name:");
-    if (!name) return;
-    const res = await run(() => api.post("/events", { name, status: "DRAFT" }, { token }));
-    flash(`Event "${res.name}" created!`);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [newEventName, setNewEventName] = useState("");
+  const [newEventDesc, setNewEventDesc] = useState("");
+  const [newEventDuration, setNewEventDuration] = useState(60);
+
+  const createNewEvent = async (e) => {
+    e.preventDefault();
+    if (!newEventName.trim()) return;
+    const res = await run(() => api.post("/admin/events/create", {
+      name: newEventName.trim(),
+      description: newEventDesc.trim(),
+      duration: Number(newEventDuration),
+      status: "DRAFT"
+    }, { token }));
+    flash(`Event "${res.event.name}" created with timer ${res.event.duration} minutes!`);
+    setShowCreateModal(false);
+    setNewEventName("");
+    setNewEventDesc("");
+    setNewEventDuration(60);
     loadEvents().catch(() => {});
   };
 
@@ -337,7 +395,7 @@ function Overview({ token, run, flash, selectedEventId, setSelectedEventId }) {
             <button className="btn small secondary" onClick={generateAssignments}>
               🎲 Generate Clue Assignments
             </button>
-            <button className="btn small ok" onClick={createNewEvent}>
+            <button className="btn small ok" onClick={() => setShowCreateModal(true)}>
               + Create Event
             </button>
           </div>
@@ -371,6 +429,66 @@ function Overview({ token, run, flash, selectedEventId, setSelectedEventId }) {
           )}
         </div>
       </div>
+
+      {showCreateModal && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.85)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}>
+          <form onSubmit={createNewEvent} className="card animate-scale-up" style={{ width: "100%", maxWidth: 500, background: "var(--bg-1)" }}>
+            <h3 style={{ color: "var(--gold)", margin: "0 0 12px" }}>🎯 Create New Treasure Hunt Event</h3>
+            <div className="field" style={{ marginBottom: 12 }}>
+              <label>Event Name *</label>
+              <input
+                type="text"
+                placeholder="e.g. The Lost Treasure - Winter Quest"
+                value={newEventName}
+                onChange={(e) => setNewEventName(e.target.value)}
+                required
+              />
+            </div>
+            <div className="field" style={{ marginBottom: 12 }}>
+              <label>Description / Subtitle</label>
+              <input
+                type="text"
+                placeholder="e.g. SCAN. SOLVE. SEARCH. SURVIVE."
+                value={newEventDesc}
+                onChange={(e) => setNewEventDesc(e.target.value)}
+              />
+            </div>
+            <div className="field" style={{ marginBottom: 16 }}>
+              <label>Event Duration / Hunt Timer</label>
+              <div className="row" style={{ gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
+                {[30, 45, 60, 90, 120, 180].map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    className={`btn small ${Number(newEventDuration) === m ? "ok" : "secondary"}`}
+                    onClick={() => setNewEventDuration(m)}
+                  >
+                    {m >= 60 ? `${m / 60} hr${m > 60 ? "s" : ""}` : `${m} mins`}
+                  </button>
+                ))}
+              </div>
+              <div className="row" style={{ gap: 8 }}>
+                <input
+                  type="number"
+                  min="5"
+                  max="1440"
+                  value={newEventDuration}
+                  onChange={(e) => setNewEventDuration(e.target.value)}
+                  style={{ width: 120 }}
+                />
+                <span className="muted" style={{ fontSize: 13 }}>Custom Duration (Minutes)</span>
+              </div>
+              <p className="muted" style={{ fontSize: 12, margin: "6px 0 0" }}>
+                ⏰ Once the timer expires during live gameplay, scans and submissions will automatically stop for all teams.
+              </p>
+            </div>
+            <div className="row" style={{ justifyContent: "flex-end", gap: 8 }}>
+              <button className="btn secondary" type="button" onClick={() => setShowCreateModal(false)}>Cancel</button>
+              <button className="btn ok" type="submit">+ Create Event</button>
+            </div>
+          </form>
+        </div>
+      )}
 
       {showDeleteModal && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.8)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 1000, padding: 16 }}>
@@ -441,22 +559,7 @@ function Overview({ token, run, flash, selectedEventId, setSelectedEventId }) {
                 />
               </div>
 
-              <h4>🎨 Dynamic Event Website Theme</h4>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 16 }}>
-                <div className="field">
-                  <label>Primary Theme Color</label>
-                  <input
-                    type="color"
-                    value={settingsDraft.theme?.primaryColor || "#10b981"}
-                    onChange={(e) => setSettingsDraft({
-                      ...settingsDraft,
-                      theme: { ...settingsDraft.theme, primaryColor: e.target.value }
-                    })}
-                  />
-                </div>
-              </div>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+              <div style={{ marginBottom: 16 }}>
                 <label className="row">
                   <input
                     type="checkbox"
@@ -468,28 +571,6 @@ function Overview({ token, run, flash, selectedEventId, setSelectedEventId }) {
                   />
                   <span>Enable Physical Secret Code Form for Players</span>
                 </label>
-                <div className="field">
-                  <label>Accent Gold Color</label>
-                  <input
-                    type="color"
-                    value={settingsDraft.theme?.accentColor || "#f59e0b"}
-                    onChange={(e) => setSettingsDraft({
-                      ...settingsDraft,
-                      theme: { ...settingsDraft.theme, accentColor: e.target.value }
-                    })}
-                  />
-                </div>
-                <div className="field">
-                  <label>Background Color</label>
-                  <input
-                    type="color"
-                    value={settingsDraft.theme?.backgroundColor || "#0f172a"}
-                    onChange={(e) => setSettingsDraft({
-                      ...settingsDraft,
-                      theme: { ...settingsDraft.theme, backgroundColor: e.target.value }
-                    })}
-                  />
-                </div>
               </div>
               <h4>⏱️ Event Timer & Duration Controls</h4>
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
@@ -552,9 +633,9 @@ function Overview({ token, run, flash, selectedEventId, setSelectedEventId }) {
                 </div>
               </div>
 
-              <h4>Wrong QR Blocking Engine</h4>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-                <label className="row">
+              <h4>Wrong QR Blocking Engine (Consecutive Scans)</h4>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
+                <label className="row" style={{ gridColumn: "span 3" }}>
                   <input
                     type="checkbox"
                     checked={!!settingsDraft.settings?.wrongScanBlockingEnabled}
@@ -565,6 +646,32 @@ function Overview({ token, run, flash, selectedEventId, setSelectedEventId }) {
                   />
                   <span>Enable Wrong-Scan Blocking Engine</span>
                 </label>
+                <div className="field">
+                  <label>Consecutive Wrong Scans Limit</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="20"
+                    value={settingsDraft.settings?.wrongScanBlockThreshold || 2}
+                    onChange={(e) => setSettingsDraft({
+                      ...settingsDraft,
+                      settings: { ...settingsDraft.settings, wrongScanBlockThreshold: Number(e.target.value) }
+                    })}
+                  />
+                </div>
+                <div className="field">
+                  <label>Block Duration (Minutes)</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="1440"
+                    value={settingsDraft.settings?.wrongScanBlockDuration || 5}
+                    onChange={(e) => setSettingsDraft({
+                      ...settingsDraft,
+                      settings: { ...settingsDraft.settings, wrongScanBlockDuration: Number(e.target.value) }
+                    })}
+                  />
+                </div>
                 <div className="field">
                   <label>Strategy</label>
                   <select
@@ -590,6 +697,202 @@ function Overview({ token, run, flash, selectedEventId, setSelectedEventId }) {
         </div>
       )}
     </>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+
+function LeaderboardTab({ token, run, eventId }) {
+  const [leaderboard, setLeaderboard] = useState([]);
+  const [now, setNow] = useState(Date.now());
+  const [firstWinnerAlert, setFirstWinnerAlert] = useState(null);
+
+  const load = useCallback(async () => {
+    if (!eventId) return;
+    try {
+      const res = await run(() => api.get(`/events/${eventId}/leaderboard`, { token }));
+      const list = Array.isArray(res) ? res : res?.data || [];
+      setLeaderboard(list);
+
+      const fw = list.find((t) => t.isFirstWinner) || (list[0]?.firstWinnerInfo?.firstWinnerTeamName ? list[0].firstWinnerInfo : null);
+      if (fw) {
+        const winnerName = fw.teamName || fw.firstWinnerTeamName;
+        const winnerTime = fw.treasureCodeSolvedAt || fw.firstWinnerTimestamp;
+        if (winnerName) {
+          setFirstWinnerAlert({
+            teamName: winnerName,
+            timestamp: winnerTime ? new Date(winnerTime).toLocaleString() : "Just now",
+          });
+        }
+      }
+    } catch {
+      setLeaderboard([]);
+    }
+  }, [token, eventId, run]);
+
+  useEffect(() => {
+    load().catch(() => {});
+    const pollTimer = setInterval(() => load().catch(() => {}), 3000);
+    return () => clearInterval(pollTimer);
+  }, [load]);
+
+  useEffect(() => {
+    const clockTimer = setInterval(() => setNow(Date.now()), 100);
+    return () => clearInterval(clockTimer);
+  }, []);
+
+  if (!eventId) {
+    return (
+      <div className="card alert warn">
+        ⚠️ <strong>No Active Event Selected:</strong> Please select or create an event using the Event Context bar above to view the live leaderboard.
+      </div>
+    );
+  }
+
+  const fmtMsPrecise = (ms) => {
+    if (ms == null || isNaN(ms) || ms <= 0) return "00:00.000";
+    const h = Math.floor(ms / 3600000);
+    const m = Math.floor((ms % 3600000) / 60000);
+    const s = Math.floor((ms % 60000) / 1000);
+    const millis = Math.floor(ms % 1000);
+    const pad = (n, len = 2) => String(n).padStart(len, "0");
+    return h > 0
+      ? `${h}:${pad(m)}:${pad(s)}.${pad(millis, 3)}`
+      : `${pad(m)}:${pad(s)}.${pad(millis, 3)}`;
+  };
+
+  return (
+    <div className="card">
+      <div className="spread" style={{ marginBottom: 16 }}>
+        <div>
+          <h3 style={{ margin: 0, color: "var(--gold)" }}>🏆 Live Admin Leaderboard</h3>
+          <p className="muted" style={{ fontSize: 13, marginTop: 4 }}>
+            Real-time rankings with millisecond completion times and live team progress tracking.
+          </p>
+        </div>
+        <button className="btn small secondary" onClick={() => load().catch(() => {})}>
+          🔄 Refresh
+        </button>
+      </div>
+
+      {firstWinnerAlert && (
+        <div
+          className="card alert ok animate-fade-in"
+          style={{
+            marginBottom: 20,
+            padding: "20px 24px",
+            background: "rgba(16, 185, 129, 0.2)",
+            border: "2px solid var(--gold)",
+            borderRadius: 12,
+            boxShadow: "0 0 25px rgba(245, 158, 11, 0.3)",
+          }}
+        >
+          <div className="spread">
+            <div className="row" style={{ gap: 16 }}>
+              <span style={{ fontSize: 40 }}>🏆</span>
+              <div>
+                <h2 style={{ margin: 0, color: "var(--gold)" }}>
+                  🎉 FIRST WINNER DECLARED! {firstWinnerAlert.teamName}
+                </h2>
+                <p style={{ margin: "6px 0 0", fontSize: 14, color: "var(--text)" }}>
+                  Team <strong>{firstWinnerAlert.teamName}</strong> was the FIRST to correctly solve the <strong>Treasure Code Pieces</strong> at <strong>{firstWinnerAlert.timestamp}</strong>!
+                  <br />
+                  🎁 <strong>Physical Reward:</strong> This team wins the physical treasure chest bounty!
+                </p>
+              </div>
+            </div>
+            <button className="btn small secondary" onClick={() => setFirstWinnerAlert(null)}>Dismiss Alert</button>
+          </div>
+        </div>
+      )}
+
+      <table className="board" style={{ width: "100%" }}>
+        <thead>
+          <tr>
+            <th>Rank</th>
+            <th>Team Name & ID</th>
+            <th>Score</th>
+            <th>Progress</th>
+            <th>Status</th>
+            <th>Live Duration (ms)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {leaderboard.length === 0 ? (
+            <tr>
+              <td colSpan={6} style={{ textAlign: "center", padding: 20 }} className="muted">
+                No active player teams on the leaderboard yet.
+              </td>
+            </tr>
+          ) : (
+            leaderboard.map((t) => {
+              const start = t.startTime ? new Date(t.startTime).getTime() : 0;
+              const end = t.completionTime ? new Date(t.completionTime).getTime() : 0;
+              let elapsedMs = 0;
+
+              if (t.completed && end && start) {
+                elapsedMs = Math.max(0, end - start);
+              } else if (start) {
+                elapsedMs = Math.max(0, now - start);
+              }
+
+              const totalLvl = t.totalLevels || 1;
+              const pct = Math.min(100, Math.round(((t.solvedCluesCount || t.progress || 0) / totalLvl) * 100));
+
+              return (
+                <tr key={t.id || t.teamId}>
+                  <td className="mono" style={{ fontWeight: 700, fontSize: 16, color: "var(--gold)" }}>
+                    #{t.rank}
+                  </td>
+                  <td>
+                    <div className="row" style={{ gap: 6 }}>
+                      <strong>{t.teamName}</strong>
+                      {t.isFirstWinner && (
+                        <span className="pill ok" style={{ fontSize: 10, padding: "2px 6px", background: "linear-gradient(135deg, #f59e0b, #d97706)", color: "#fff", fontWeight: 700 }}>
+                          🏆 First Winner
+                        </span>
+                      )}
+                    </div>
+                    <div className="muted mono" style={{ fontSize: 12 }}>{t.teamId}</div>
+                    {t.treasureCodeSolvedAt && (
+                      <div className="muted mono" style={{ fontSize: 11, color: "var(--gold-light)", marginTop: 2 }}>
+                        🔑 Solved Code: {new Date(t.treasureCodeSolvedAt).toLocaleTimeString()}
+                      </div>
+                    )}
+                  </td>
+                  <td className="mono" style={{ fontSize: 16, fontWeight: 700, color: "var(--gold)" }}>
+                    {t.points} pts
+                  </td>
+                  <td>
+                    <div style={{ minWidth: 120 }}>
+                      <div className="spread" style={{ fontSize: 12, marginBottom: 4 }}>
+                        <span>Lvl {t.currentLevel} / {totalLvl}</span>
+                        <span className="muted">{pct}%</span>
+                      </div>
+                      <div style={{ background: "var(--bg-3)", height: 6, borderRadius: 3, overflow: "hidden" }}>
+                        <div style={{ width: `${pct}%`, background: "var(--gold)", height: "100%" }} />
+                      </div>
+                    </div>
+                  </td>
+                  <td>
+                    {t.completed ? (
+                      <span className="pill ok">🏆 Completed</span>
+                    ) : t.blocked ? (
+                      <span className="pill danger">🚫 Blocked</span>
+                    ) : (
+                      <span className="pill info">⛵ In Progress</span>
+                    )}
+                  </td>
+                  <td className="mono" style={{ fontWeight: 600, color: t.completed ? "var(--ok)" : "var(--gold)" }}>
+                    {fmtMsPrecise(elapsedMs)}
+                  </td>
+                </tr>
+              );
+            })
+          )}
+        </tbody>
+      </table>
+    </div>
   );
 }
 
@@ -652,12 +955,64 @@ function Teams({ token, run, flash, eventId }) {
 
   const refresh = () => load().catch(() => {});
 
+  const unblockTeam = async (teamId) => {
+    await run(() => api.post(`/events/${eventId}/teams/block`, { teamId, block: false }, { token }));
+    flash("Team unblocked successfully!");
+    refresh();
+  };
+
+  const now = Date.now();
+  const activeBlockedTeams = teams.filter((t) => {
+    if (!t.blocked) return false;
+    if (t.blockedUntil && new Date(t.blockedUntil).getTime() <= now) return false;
+    return true;
+  });
+
   const filtered = teams.filter(
     (t) => !search || (t.teamName + t.teamId).toLowerCase().includes(search.toLowerCase())
   );
 
   return (
-    <div className="card">
+    <>
+      {activeBlockedTeams.length > 0 && (
+        <div className="card" style={{ marginBottom: 20, borderLeft: "4px solid var(--danger)", background: "rgba(225,29,72,0.1)" }}>
+          <div className="spread" style={{ marginBottom: 12 }}>
+            <h3 style={{ margin: 0, color: "var(--danger)" }}>🚫 Currently Blocked Teams ({activeBlockedTeams.length})</h3>
+            <span className="pill danger" style={{ fontSize: 11 }}>Wrong QR Lock Engine</span>
+          </div>
+          <p className="muted" style={{ fontSize: 13, marginTop: 0, marginBottom: 12 }}>
+            Teams temporarily blocked due to consecutive wrong QR scans. You can manually unblock them below or allow their countdown timer to expire.
+          </p>
+
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            {activeBlockedTeams.map((bt) => {
+              const untilMs = bt.blockedUntil ? new Date(bt.blockedUntil).getTime() - now : 0;
+              const mins = Math.max(0, Math.floor(untilMs / 60000));
+              const secs = Math.max(0, Math.floor((untilMs % 60000) / 1000));
+              const timerStr = untilMs > 0 ? `${mins}m ${secs}s remaining` : "Expired";
+
+              return (
+                <div key={bt._id} className="spread" style={{ background: "var(--bg-2)", padding: "10px 14px", borderRadius: 6, border: "1px solid var(--danger)" }}>
+                  <div>
+                    <strong style={{ color: "var(--danger)" }}>{bt.teamName}</strong> <span className="mono muted">({bt.teamId})</span>
+                    <div style={{ fontSize: 12, marginTop: 2, color: "var(--text)" }}>
+                      Reason: <em>{bt.blockReason || "Multiple consecutive wrong QR scans"}</em>
+                    </div>
+                  </div>
+                  <div className="row" style={{ gap: 12 }}>
+                    <span className="pill warn mono" style={{ fontSize: 12 }}>⏳ {timerStr}</span>
+                    <button className="btn small ok" onClick={() => unblockTeam(bt._id)}>
+                      🔓 Unblock Team Now
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      <div className="card">
       <div className="spread" style={{ marginBottom: 12 }}>
         <h3 style={{ margin: 0, color: "var(--gold)" }}>🏴‍☠️ Registered Teams ({teams.length})</h3>
         <div className="row" style={{ gap: 8 }}>
@@ -809,6 +1164,7 @@ function Teams({ token, run, flash, eventId }) {
         </div>
       ))}
     </div>
+    </>
   );
 }
 
@@ -883,30 +1239,56 @@ function Assignments({ token, run, eventId }) {
               <div style={{ fontWeight: 700, fontSize: 16, color: "var(--gold)", marginBottom: 8 }}>
                 🏴‍☠️ {t.teamName} <span className="muted mono" style={{ fontSize: 13 }}>({t.teamCode})</span>
               </div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
                 {t.seq
                   .sort((a, b) => a.sequenceNumber - b.sequenceNumber)
                   .map((item) => (
                     <div
                       key={item._id}
                       style={{
-                        background: item.isFinal ? "var(--gold-dark, #78350f)" : "var(--bg-3, #334155)",
-                        border: item.isFinal ? "1px solid var(--gold)" : "1px solid var(--border)",
+                        background: item.isCompletedStep
+                          ? "rgba(16, 185, 129, 0.15)"
+                          : item.isCurrentStep
+                          ? "rgba(245, 158, 11, 0.15)"
+                          : "var(--bg-3, #334155)",
+                        border: item.isCompletedStep
+                          ? "1px solid var(--ok, #10b981)"
+                          : item.isCurrentStep
+                          ? "1px solid var(--gold, #f59e0b)"
+                          : "1px solid var(--border)",
                         borderRadius: 6,
-                        padding: "8px 12px",
+                        padding: "10px 12px",
                         fontSize: 13,
-                        minWidth: 140,
+                        minWidth: 180,
+                        maxWidth: 240,
                       }}
                     >
-                      <div style={{ fontSize: 11, color: item.isFinal ? "var(--gold)" : "var(--muted)", fontWeight: 700 }}>
-                        STEP {item.sequenceNumber} {item.isFinal ? "🏆 FINAL" : ""}
+                      <div className="spread" style={{ fontSize: 11, fontWeight: 700, marginBottom: 4 }}>
+                        <span style={{ color: item.isFinal ? "var(--gold)" : "var(--text)" }}>
+                          STEP {item.sequenceNumber} {item.isFinal ? "🏆 FINAL" : ""}
+                        </span>
+                        {item.isCompletedStep ? (
+                          <span className="pill ok" style={{ fontSize: 10, padding: "2px 6px" }}>✅ Completed</span>
+                        ) : item.isCurrentStep ? (
+                          <span className="pill warn" style={{ fontSize: 10, padding: "2px 6px" }}>⛵ Active Step</span>
+                        ) : (
+                          <span className="pill info" style={{ fontSize: 10, padding: "2px 6px" }}>🔒 Upcoming</span>
+                        )}
                       </div>
-                      <div style={{ fontWeight: 600, marginTop: 2 }}>
+
+                      <div style={{ fontWeight: 600 }}>
                         {item.clueId ? `#${item.clueId.clueNumber} ${item.clueId.title}` : "Clue Deleted"}
                       </div>
+
                       {item.clueId?.checkpointName && (
                         <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>
                           📍 {item.clueId.checkpointName}
+                        </div>
+                      )}
+
+                      {item.sideQuest && (
+                        <div style={{ marginTop: 6, paddingTop: 6, borderTop: "1px dashed var(--border)", fontSize: 11, color: "var(--gold-light)" }}>
+                          🎯 <strong>Assigned Side Quest:</strong> "{item.sideQuest.title}"
                         </div>
                       )}
                     </div>
@@ -1030,7 +1412,7 @@ function Clues({ token, run, flash, eventId }) {
           title: form.title,
           description: form.description,
           checkpointName: form.checkpointName,
-          correctAnswer: form.correctAnswer,
+          correctAnswer: form.correctAnswer || "QR_SCAN",
           points: Number(form.points),
         },
         { token }
@@ -1107,8 +1489,8 @@ function Clues({ token, run, flash, eventId }) {
                 type="button"
                 className="btn small ghost"
                 onClick={() => setBulkJson(JSON.stringify([
-                  { clueNumber: 1, title: "Library Secret", description: "Look under desk 3", checkpointName: "Library", correctAnswer: "BOOK", points: 10 },
-                  { clueNumber: 2, title: "Lab Cipher", description: "Read the periodic table", checkpointName: "Science Lab", correctAnswer: "NEON", points: 15 }
+                  { clueNumber: 1, title: "Old Library Station", description: "Find the oldest reading room on campus.", checkpointName: "Library Main Desk", correctAnswer: "QR_SCAN", points: 10 },
+                  { clueNumber: 2, title: "Science Lab Station", description: "Located near the chemistry hallway.", checkpointName: "Lab 204", correctAnswer: "QR_SCAN", points: 15 }
                 ], null, 2))}
               >
                 📄 Demo JSON
@@ -1116,7 +1498,7 @@ function Clues({ token, run, flash, eventId }) {
               <button
                 type="button"
                 className="btn small ghost"
-                onClick={() => setBulkJson("clueNumber,title,description,checkpointName,correctAnswer,points\n1,Library Secret,Look under desk 3,Library,BOOK,10\n2,Lab Cipher,Read the periodic table,Science Lab,NEON,15")}
+                onClick={() => setBulkJson("clueNumber,title,description,checkpointName,correctAnswer,points\n1,Old Library Station,Find the oldest reading room on campus.,Library Main Desk,QR_SCAN,10\n2,Science Lab Station,Located near the chemistry hallway.,Lab 204,QR_SCAN,15")}
               >
                 📊 Demo CSV
               </button>
@@ -1195,10 +1577,11 @@ function Clues({ token, run, flash, eventId }) {
         <form onSubmit={create} style={{ marginBottom: 16, background: "var(--bg-2)", padding: 12, borderRadius: 6 }}>
           <div className="field"><label>Clue #</label><input type="number" value={form.clueNumber} onChange={(e) => setForm({ ...form, clueNumber: e.target.value })} required /></div>
           <div className="field"><label>Title</label><input value={form.title} onChange={(e) => setForm({ ...form, title: e.target.value })} required /></div>
-          <div className="field"><label>Checkpoint Name</label><input value={form.checkpointName} onChange={(e) => setForm({ ...form, checkpointName: e.target.value })} required /></div>
-          <div className="field"><label>Description</label><input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} required /></div>
-          <div className="field"><label>Correct Answer</label><input value={form.correctAnswer} onChange={(e) => setForm({ ...form, correctAnswer: e.target.value })} required /></div>
-          <button className="btn small" type="submit" style={{ marginTop: 8 }}>Save Clue</button>
+          <div className="field"><label>Checkpoint / Location Name *</label><input placeholder="e.g. Science Library 2nd Floor" value={form.checkpointName} onChange={(e) => setForm({ ...form, checkpointName: e.target.value })} required /></div>
+          <div className="field"><label>Riddle / Description *</label><textarea placeholder="Location riddle leading players to the physical checkpoint..." value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} required style={{ width: "100%", padding: 8 }} /></div>
+          <div className="field"><label>Points Value</label><input type="number" value={form.points} onChange={(e) => setForm({ ...form, points: e.target.value })} required /></div>
+          <div className="field"><label>Answer Key / Secret Code (Optional - Defaults to QR Scan)</label><input placeholder="QR_SCAN" value={form.correctAnswer} onChange={(e) => setForm({ ...form, correctAnswer: e.target.value })} /></div>
+          <button className="btn small ok" type="submit" style={{ marginTop: 8 }}>Save Clue</button>
         </form>
       )}
 
@@ -1312,9 +1695,14 @@ function QRCodes({ token, run, flash, eventId }) {
             onClick={async () => {
               try {
                 flash("Downloading QR Images ZIP...");
-                const response = await fetch(`/api/events/${eventId}/qrcodes/zip`, {
+                let response = await fetch(getApiUrl(`/events/${eventId}/qrcodes/zip`), {
                   headers: { Authorization: `Bearer ${token}` }
                 });
+                if (!response.ok) {
+                  response = await fetch(getApiUrl(`/admin/qrcodes/zip?eventId=${eventId}`), {
+                    headers: { Authorization: `Bearer ${token}` }
+                  });
+                }
                 if (!response.ok) throw new Error("Failed to generate ZIP archive.");
                 const blob = await response.blob();
                 const url = window.URL.createObjectURL(blob);
@@ -1392,30 +1780,46 @@ function QRCodes({ token, run, flash, eventId }) {
         </div>
       )}
 
-      {qrs.map((qr) => (
-        <div key={qr._id} className="card" style={{ background: "var(--bg-2)", padding: 14, marginBottom: 8 }}>
-          <div className="spread">
-            <div>
-              <span className="mono" style={{ fontWeight: 700, fontSize: 16, color: "var(--gold)" }}>{qr.qrId}</span>
-              <span className="pill info" style={{ marginLeft: 8, fontSize: 11 }}>Type: {qr.type}</span>
-              {qr.checkpointName && <span className="muted" style={{ marginLeft: 8, fontSize: 13 }}>({qr.checkpointName})</span>}
-              {qr.branding?.customText && (
-                <div style={{ fontSize: 12, color: "var(--gold-light)", marginTop: 4 }}>
-                  🏷️ Label Text: "{qr.branding.customText}"
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: 12 }}>
+        {qrs.map((qr) => {
+          const qrScanUrl = `${window.location.origin}/scan/${qr.qrId}`;
+          const qrDataUri = `https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(qrScanUrl)}`;
+
+          return (
+            <div key={qr._id} className="card" style={{ background: "var(--bg-2)", padding: 14, display: "flex", flexDirection: "column", justifyContent: "space-between" }}>
+              <div>
+                <div className="spread" style={{ marginBottom: 8 }}>
+                  <span className="mono" style={{ fontWeight: 700, fontSize: 16, color: "var(--gold)" }}>{qr.qrId}</span>
+                  <span className="pill info" style={{ fontSize: 11 }}>{qr.type}</span>
                 </div>
-              )}
-              {qr.branding?.logo && (
-                <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>
-                  🖼️ Logo URL: <span className="mono">{qr.branding.logo}</span>
+
+                {/* Inline Visual QR Code Preview */}
+                <div style={{ textAlign: "center", background: "#ffffff", padding: 10, borderRadius: 8, margin: "8px 0" }}>
+                  <img
+                    src={qrDataUri}
+                    alt={`QR ${qr.qrId}`}
+                    style={{ width: 140, height: 140, display: "block", margin: "0 auto" }}
+                  />
+                  {qr.branding?.customText && (
+                    <div style={{ fontSize: 11, fontWeight: 700, color: "#78350f", background: "#fef3c7", padding: "2px 6px", borderRadius: 4, marginTop: 4 }}>
+                      {qr.branding.customText}
+                    </div>
+                  )}
                 </div>
-              )}
+
+                {qr.checkpointName && <div className="muted" style={{ fontSize: 13, textAlign: "center" }}>📍 {qr.checkpointName}</div>}
+              </div>
+
+              <div className="spread" style={{ marginTop: 12, paddingTop: 8, borderTop: "1px solid var(--border)" }}>
+                <span className="muted mono" style={{ fontSize: 11 }}>Status: {qr.active ? "Active" : "Inactive"}</span>
+                <button className={`btn small ${qr.active ? "secondary" : "ok"}`} onClick={() => toggle(qr)}>
+                  {qr.active ? "Deactivate" : "Activate"}
+                </button>
+              </div>
             </div>
-            <button className="btn small secondary" onClick={() => toggle(qr)}>
-              {qr.active ? "Deactivate" : "Activate"}
-            </button>
-          </div>
-        </div>
-      ))}
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -1679,12 +2083,25 @@ function Audit({ token, run, eventId }) {
       </div>
 
       <ul className="list">
-        {logs.map((l) => (
-          <li key={l._id}>
-            <span className="pill info" style={{ fontSize: 11 }}>{l.action}</span>{" "}
-            <strong>{l.adminName || "Admin"}</strong>: {l.note}
-          </li>
-        ))}
+        {logs.map((l) => {
+          const date = l.createdAt ? new Date(l.createdAt) : null;
+          const pad = (n, len = 2) => String(n).padStart(len, "0");
+          const timeStr = date
+            ? `${date.toLocaleDateString()} ${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}.${pad(date.getMilliseconds(), 3)}`
+            : "—";
+
+          return (
+            <li key={l._id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div>
+                <span className="pill info" style={{ fontSize: 11 }}>{l.action}</span>{" "}
+                <strong>{l.adminName || "Admin"}</strong>: {l.note}
+              </div>
+              <span className="mono muted" style={{ fontSize: 11, marginLeft: 12 }}>
+                {timeStr}
+              </span>
+            </li>
+          );
+        })}
       </ul>
     </div>
   );

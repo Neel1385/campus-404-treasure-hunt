@@ -316,6 +316,31 @@ const listQRCodes = asyncHandler(async (req, res) => {
   return success(res, { qrcodes: qrs, frontendUrl }, "QR codes");
 });
 
+const downloadQRCodesZip = asyncHandler(async (req, res) => {
+  const eventId = await resolveEventId(req);
+  const qrcode = require("qrcode");
+  const JSZip = require("jszip");
+  const qrs = await QRCode.find({ eventId }).populate("clueId", "clueNumber title");
+
+  const zip = new JSZip();
+  if (qrs.length === 0) {
+    zip.file("README.txt", "No QR codes created for this event yet.");
+  } else {
+    for (const qr of qrs) {
+      const url = qrService.qrUrl(qr.qrId);
+      const dataDataUrl = await qrcode.toDataURL(url, { errorCorrectionLevel: "H", margin: 2, width: 300 });
+      const base64Data = dataDataUrl.replace(/^data:image\/png;base64,/, "");
+      const cleanName = (qr.checkpointName || (qr.clueId ? qr.clueId.title : "QR")).replace(/[^a-zA-Z0-9_-]/g, "_");
+      zip.file(`QR_${qr.qrId}_${qr.type}_${cleanName}.png`, base64Data, { base64: true });
+    }
+  }
+
+  const zipBuffer = await zip.generateAsync({ type: "nodebuffer" });
+  res.setHeader("Content-Type", "application/zip");
+  res.setHeader("Content-Disposition", `attachment; filename="qrcodes_${eventId}.zip"`);
+  res.send(zipBuffer);
+});
+
 const bulkCreateQRCodes = asyncHandler(async (req, res) => {
   const eventId = await resolveEventId(req);
   const { type = "DUMMY", count = 5, points = 0, checkpointPrefix = "Checkpoint" } = req.body || {};
@@ -442,6 +467,26 @@ const updateSettings = asyncHandler(async (req, res) => {
   return success(res, { event }, "Settings updated");
 });
 
+const createEvent = asyncHandler(async (req, res) => {
+  const body = req.body || {};
+  const name = String(body.name || "The Lost Treasure").trim();
+  const description = String(body.description || "SCAN. SOLVE. SEARCH. SURVIVE.").trim();
+  const duration = Number(body.duration) || 60; // minutes
+  const rulesAndRegulations = body.rulesAndRegulations || undefined;
+
+  const event = await Event.create({
+    name,
+    description,
+    duration,
+    status: "DRAFT",
+    rulesAndRegulations,
+    settings: body.settings || {},
+  });
+
+  await writeAudit(req.team, "EVENT_CREATED", "Event", String(event._id), undefined, event.name, `Event ${name} created with duration ${duration} mins`, event._id);
+  return success(res, { event }, `Event "${name}" created.`, 201);
+});
+
 const deleteEvent = asyncHandler(async (req, res) => {
   const eventId = req.params.eventId || (await resolveEventId(req));
   const { deleteTeams, deleteClues, deleteQRs, deleteLogs, deleteSideQuests } = req.body || {};
@@ -525,6 +570,7 @@ module.exports = {
   updateClue,
   deleteClue,
   listQRCodes,
+  downloadQRCodesZip,
   createQRCode,
   toggleQR,
   generateQR,
@@ -534,6 +580,7 @@ module.exports = {
   eventControl,
   setEventStatus,
   updateSettings,
+  createEvent,
   resetEvent,
   deleteEvent,
   listAuditLogs,

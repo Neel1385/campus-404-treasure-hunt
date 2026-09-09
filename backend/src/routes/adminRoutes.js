@@ -12,6 +12,7 @@ const {
   updateClue,
   deleteClue,
   listQRCodes,
+  downloadQRCodesZip,
   createQRCode,
   toggleQR,
   generateQR,
@@ -46,6 +47,7 @@ router.put("/clues/:id", updateClue);
 router.delete("/clues/:id", deleteClue);
 
 router.get("/qrcodes", listQRCodes);
+router.get("/qrcodes/zip", downloadQRCodesZip);
 router.post("/qrcodes", createQRCode);
 router.post("/qrcodes/generate", generateQR);
 router.post("/qrcodes/bulk", require("../controllers/adminController").bulkCreateQRCodes);
@@ -55,6 +57,7 @@ router.get("/submissions", listSubmissions);
 router.get("/scans", listScans);
 
 router.get("/event", eventControl);
+router.post("/events/create", require("../controllers/adminController").createEvent);
 router.put("/event/status", setEventStatus);
 router.put("/event/settings", updateSettings);
 router.post("/event/reset", resetEvent);

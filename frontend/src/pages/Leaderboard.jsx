@@ -91,10 +91,20 @@ export default function Leaderboard() {
                       <span className="muted mono" style={{ fontSize: 12 }}>
                         ({t.teamId})
                       </span>
-                      {t.completed && (
+                      {t.isFirstWinner && (
+                        <span className="pill ok" style={{ marginLeft: 6, background: "linear-gradient(135deg, #f59e0b, #d97706)", color: "#fff", fontWeight: 700 }}>
+                          🏆 First Winner
+                        </span>
+                      )}
+                      {t.completed && !t.isFirstWinner && (
                         <span className="pill ok" style={{ marginLeft: 6 }}>
                           🏴‍☠️ Found Final Treasure
                         </span>
+                      )}
+                      {t.treasureCodeSolvedAt && (
+                        <div className="muted mono" style={{ fontSize: 11, marginTop: 2, color: "var(--gold-light)" }}>
+                          🔑 Treasure Code Guessed: {new Date(t.treasureCodeSolvedAt).toLocaleTimeString()}
+                        </div>
                       )}
                     </td>
                     <td className="mono">

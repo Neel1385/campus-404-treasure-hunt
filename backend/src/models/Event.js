@@ -16,7 +16,7 @@ const themeSchema = new mongoose.Schema(
 
 const eventSchema = new mongoose.Schema(
   {
-    name: { type: String, default: "CAMPUS 404" },
+    name: { type: String, default: "The Lost Treasure" },
     description: { type: String, default: "SCAN. SOLVE. SEARCH. SURVIVE." },
     status: {
       type: String,
@@ -27,6 +27,9 @@ const eventSchema = new mongoose.Schema(
     endTime: { type: Date },
     duration: { type: Number, default: 60 }, // minutes
     pausedAt: { type: Date },
+    firstWinnerTeamId: { type: mongoose.Schema.Types.ObjectId, ref: "Team" },
+    firstWinnerTeamName: { type: String, default: "" },
+    firstWinnerTimestamp: { type: Date },
     theme: { type: themeSchema, default: () => ({}) },
     rulesAndRegulations: { type: String, default: "1. Respect campus property.\n2. Do not tamper with QR codes.\n3. Fair play enforced at all times." },
     settings: {
@@ -107,7 +110,7 @@ eventSchema.methods.effectiveStatus = function () {
   if (this.status === EVENT_STATUS.ENDED || this.status === EVENT_STATUS.ARCHIVED) return this.status;
   if (this.status === EVENT_STATUS.DRAFT || this.status === EVENT_STATUS.READY) return this.status;
   if (this.status === EVENT_STATUS.PAUSED) return EVENT_STATUS.PAUSED;
-  if (this.endTime && new Date() >= this.endTime) return EVENT_STATUS.ENDED;
+  if (this.endTime && new Date() >= this.endTime) return EVENT_STATUS.PAUSED;
   return EVENT_STATUS.RUNNING; // or ACTIVE
 };
 
