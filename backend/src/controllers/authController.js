@@ -101,6 +101,7 @@ const login = asyncHandler(async (req, res) => {
   const text = String(identifier).trim();
 
   const query = {
+    role: "player",
     $or: [{ teamId: text.toUpperCase() }, { teamName: text }, { email: text.toLowerCase() }],
   };
   if (eventId) {
@@ -111,10 +112,6 @@ const login = asyncHandler(async (req, res) => {
 
   if (!team || !(await team.comparePassword(password))) {
     throw new ApiError("Invalid credentials.", 401, "INVALID_CREDENTIALS");
-  }
-
-  if (team.role === "admin") {
-    throw new ApiError("Admin accounts must log in through the Admin Portal (/admin/login).", 403, "ADMIN_LOGIN_DISALLOWED");
   }
 
   if (team.status === "disabled") {

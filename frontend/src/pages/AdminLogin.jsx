@@ -40,14 +40,14 @@ export default function AdminLogin() {
 
       <form className="card" onSubmit={submit}>
         <div className="field">
-          <label>📧 Admin Email</label>
+          <label>📧 Admin Email or ID</label>
           <input
-            type="email"
+            type="text"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             required
             autoFocus
-            placeholder="admin@treasurehunt.com"
+            placeholder="admin@campus404.org or ADMIN-1"
           />
         </div>
         <div className="field">
