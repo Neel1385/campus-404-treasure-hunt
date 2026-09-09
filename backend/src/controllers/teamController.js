@@ -5,13 +5,20 @@ const scoreService = require("../services/scoreService");
 
 const me = asyncHandler(async (req, res) => {
   const team = await Team.findById(req.team._id);
-  const event = await Event.findById(team.eventId) || await Event.findOne({});
+  if (!team) {
+    return res.status(404).json({ success: false, message: "Team not found.", code: "NOT_FOUND" });
+  }
 
-  const assignments = await TeamClueAssignment.find({ eventId: team.eventId, teamId: team._id });
+  const [eventDoc, assignments, rank] = await Promise.all([
+    Event.findById(team.eventId),
+    TeamClueAssignment.find({ eventId: team.eventId, teamId: team._id }).lean(),
+    scoreService.getTeamRank(req.team._id),
+  ]);
+
+  const event = eventDoc || await Event.findOne({});
   const totalAssignedClues = assignments.length > 0 ? assignments.length : await Clue.countDocuments({ eventId: team.eventId, active: true });
   const completedCluesCount = (team.solvedClues || []).length;
   const remainingCluesCount = Math.max(0, totalAssignedClues - completedCluesCount);
-  const rank = await scoreService.getTeamRank(req.team._id);
 
   return success(
     res,
@@ -19,9 +26,9 @@ const me = asyncHandler(async (req, res) => {
       team: team.toSafeJSON(),
       event: event
         ? {
-            status: event.effectiveStatus(),
+            status: event.effectiveStatus ? event.effectiveStatus() : event.status,
             name: event.name,
-            remainingMs: event.remainingMs(),
+            remainingMs: event.remainingMs ? event.remainingMs() : 0,
           }
         : null,
       totalClues: totalAssignedClues,

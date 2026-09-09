@@ -14,4 +14,6 @@ const submissionSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+submissionSchema.index({ eventId: 1, teamId: 1, createdAt: -1 });
+
 module.exports = mongoose.model("Submission", submissionSchema);

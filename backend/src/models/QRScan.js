@@ -15,5 +15,6 @@ const qrScanSchema = new mongoose.Schema(
 );
 
 qrScanSchema.index({ eventId: 1, teamId: 1, qrId: 1 }, { unique: true, partialFilterExpression: { correct: true } });
+qrScanSchema.index({ eventId: 1, teamId: 1, createdAt: -1 });
 
 module.exports = mongoose.model("QRScan", qrScanSchema);

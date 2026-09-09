@@ -2,6 +2,7 @@ const express = require("express");
 const http = require("http");
 const helmet = require("helmet");
 const cors = require("cors");
+const compression = require("compression");
 const { initSocket } = require("./socket");
 const { connectDB } = require("./config/db");
 const { env, port, clientUrl, clientOrigins, mongoUri } = require("./config/env");
@@ -22,6 +23,7 @@ const app = express();
 
 app.set("trust proxy", 1);
 
+app.use(compression());
 app.use(helmet({
   crossOriginResourcePolicy: false,
   crossOriginEmbedderPolicy: false,

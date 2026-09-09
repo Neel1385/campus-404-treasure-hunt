@@ -8,7 +8,7 @@ const router = express.Router();
 router.get("/:id", protect, enforceEventIsolation, asyncHandler(async (req, res) => {
   const { QRCode } = require("../models");
   const eventId = req.query.eventId || req.team.eventId;
-  const qr = await QRCode.findOne({ eventId, qrId: String(req.params.id).toUpperCase() });
+  const qr = await QRCode.findOne({ eventId, qrId: String(req.params.id).toUpperCase() }).lean();
 
   if (!qr) {
     return res.status(404).json({ success: false, message: "QR code not found for this event.", code: "QR_NOT_FOUND" });

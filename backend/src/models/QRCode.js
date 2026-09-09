@@ -27,5 +27,6 @@ const qrCodeSchema = new mongoose.Schema(
 );
 
 qrCodeSchema.index({ eventId: 1, qrId: 1 }, { unique: true });
+qrCodeSchema.index({ eventId: 1, clueId: 1 });
 
 module.exports = mongoose.model("QRCode", qrCodeSchema);

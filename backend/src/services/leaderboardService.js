@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const { Team, Clue } = require("../models");
 const { TEAM_STATUS } = require("../utils/constants");
 
@@ -42,9 +43,18 @@ async function getLeaderboard(eventId) {
   const { TeamClueAssignment } = require("../models");
   const defaultTotalClues = await Clue.countDocuments({ ...(eventId ? { eventId } : {}), active: true });
 
-  const result = [];
-  for (let index = 0; index < sorted.length; index++) {
-    const team = sorted[index];
+  // Single batch aggregation for assignment counts across all teams
+  const assignmentCounts = await TeamClueAssignment.aggregate([
+    { $match: { ...(eventId ? { eventId: new mongoose.Types.ObjectId(String(eventId)) } : {}) } },
+    { $group: { _id: "$teamId", count: { $sum: 1 } } },
+  ]);
+
+  const assignmentCountMap = new Map();
+  for (const item of assignmentCounts) {
+    assignmentCountMap.set(String(item._id), item.count);
+  }
+
+  return sorted.map((team, index) => {
     const start = team.startTime ? new Date(team.startTime) : new Date(team.createdAt);
     const end = team.endTime ? new Date(team.endTime) : null;
     let completionTimeMs = 0;
@@ -54,10 +64,10 @@ async function getLeaderboard(eventId) {
       completionTimeMs = Math.max(0, Date.now() - start.getTime());
     }
 
-    const teamAssignmentsCount = await TeamClueAssignment.countDocuments({ eventId: team.eventId, teamId: team._id });
+    const teamAssignmentsCount = assignmentCountMap.get(String(team._id)) || 0;
     const totalLevels = teamAssignmentsCount > 0 ? teamAssignmentsCount : defaultTotalClues;
 
-    result.push({
+    return {
       rank: index + 1,
       id: team._id,
       teamName: team.teamName,
@@ -79,10 +89,8 @@ async function getLeaderboard(eventId) {
       treasureCodeSolvedAt: team.treasureCodeSolvedAt || null,
       isFirstWinner: !!team.isFirstWinner || (firstWinnerInfo && String(firstWinnerInfo.firstWinnerTeamId) === String(team._id)),
       firstWinnerInfo,
-    });
-  }
-
-  return result;
+    };
+  });
 }
 
 async function getEventLeaderboard(eventId) {

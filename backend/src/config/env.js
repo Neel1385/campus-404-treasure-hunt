@@ -17,7 +17,8 @@ if (missing.length > 0 && process.env.NODE_ENV !== "test") {
   );
 }
 
-const clientOrigins = (process.env.CLIENT_URL || "http://localhost:5173")
+const defaultClientUrls = "http://localhost:5173,https://campus404.vercel.app,https://thelosttreasure.vercel.app";
+const clientOrigins = (process.env.CLIENT_URL || defaultClientUrls)
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
@@ -28,9 +29,9 @@ module.exports = {
   mongoUri: process.env.MONGODB_URI,
   jwtSecret: process.env.JWT_SECRET || "insecure-dev-secret-change-me",
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || "7d",
-  clientUrl: process.env.CLIENT_URL || "http://localhost:5173",
+  clientUrl: process.env.CLIENT_URL || defaultClientUrls,
   clientOrigins: clientOrigins.length > 0 ? clientOrigins : ["*"],
-  frontendUrl: process.env.FRONTEND_URL || process.env.CLIENT_URL || "http://localhost:5173",
+  frontendUrl: process.env.FRONTEND_URL || process.env.CLIENT_URL || "https://thelosttreasure.vercel.app",
   admin: {
     email: process.env.ADMIN_EMAIL || "admin@campus404.org",
     password: process.env.ADMIN_PASSWORD || "Admin@404!",
