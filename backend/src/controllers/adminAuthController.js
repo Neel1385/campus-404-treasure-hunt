@@ -22,7 +22,24 @@ const adminLogin = asyncHandler(async (req, res) => {
     ],
   }).select("+passwordHash");
 
-  if (!adminAccount || !(await adminAccount.comparePassword(password))) {
+  if (!adminAccount) {
+    throw new ApiError("Invalid admin credentials.", 401, "INVALID_CREDENTIALS");
+  }
+
+  let isMatch = false;
+  try {
+    isMatch = await adminAccount.comparePassword(password);
+  } catch {
+    /* non-bcrypt hash */
+  }
+
+  if (!isMatch && adminAccount.passwordHash === password) {
+    isMatch = true;
+    adminAccount.passwordHash = password;
+    await adminAccount.save();
+  }
+
+  if (!isMatch) {
     throw new ApiError("Invalid admin credentials.", 401, "INVALID_CREDENTIALS");
   }
 

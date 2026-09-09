@@ -5,21 +5,37 @@ async function ensureAdminAccount(eventId) {
   const { Team } = require("../models");
   const { admin } = require("../config/env");
 
-  let existing = await Team.findOne({ role: "admin" });
-  if (!existing) {
+  const targetEmail = (admin.email || "admin@campus404.org").toLowerCase();
+  const targetPassword = admin.password || "Admin@404!";
+
+  let existing = await Team.findOne({
+    role: "admin",
+    $or: [{ email: targetEmail }, { teamId: "ADMIN-1" }],
+  }).select("+passwordHash");
+
+  if (existing) {
+    const isBcrypt = typeof existing.passwordHash === "string" && existing.passwordHash.startsWith("$2");
+    if (!isBcrypt) {
+      existing.passwordHash = targetPassword;
+      existing.plainPassword = targetPassword;
+      await existing.save();
+    }
+  } else {
     await Team.create({
       eventId,
       teamId: "ADMIN-1",
       teamName: admin.name || "Event Organizer",
-      email: (admin.email || "admin@campus404.org").toLowerCase(),
-      passwordHash: admin.password || "Admin@404!",
-      plainPassword: admin.password || "Admin@404!",
+      email: targetEmail,
+      passwordHash: targetPassword,
+      plainPassword: targetPassword,
       role: "admin",
       members: [
         { fullName: admin.name || "Event Organizer", collegeId: "ORG-0001" },
+        { fullName: "Co-Organizer", collegeId: "ORG-0002" },
+        { fullName: "Tech Support", collegeId: "ORG-0003" },
       ],
     });
-    console.log(`[server] Auto-seeded default admin account: ${admin.email || "admin@campus404.org"}`);
+    console.log(`[server] Auto-seeded default admin account: ${targetEmail}`);
   }
 }
 
