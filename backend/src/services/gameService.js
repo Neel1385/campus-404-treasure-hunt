@@ -103,6 +103,8 @@ async function bulkGenerateTeams(eventId, count = 5, prefix = "TEAM", adminTeam)
 }
 
 // --- Final Secret Code Try ---
+// Only the FIRST team to enter the correct code earns the bounty; later
+// correct entries are told the treasure has already been claimed.
 async function tryFinalSecretCode(eventId, team, inputSecretCode) {
   const event = await eventService.getEventById(eventId);
   const settings = event.settings || {};
@@ -114,9 +116,25 @@ async function tryFinalSecretCode(eventId, team, inputSecretCode) {
   }
 
   const now = new Date();
-  team.treasureCodeSolvedAt = now;
+  const bonusPoints = Number(settings.finalChallengePoints) || 100;
 
-  // Atomic winner claim: only set if firstWinnerTeamId does not exist yet
+  // A team that already solved the code (or is already completed) must not
+  // be rewarded a second time.
+  if (team.treasureCodeSolvedAt || team.status === TEAM_STATUS.COMPLETED) {
+    return {
+      success: true,
+      correct: true,
+      isFirstWinner: Boolean(team.isFirstWinner),
+      alreadyClaimed: true,
+      pointsAwarded: 0,
+      message: "You already unlocked the final treasure code. No additional points awarded.",
+      totalPoints: team.points,
+    };
+  }
+
+  // Atomic winner claim: only the FIRST team to submit the correct code wins
+  // the physical treasure bounty.  After that the claimed field is set and
+  // subsequent findOneAndUpdate calls return null.
   const claimedEvent = await Event.findOneAndUpdate(
     { _id: eventId, $or: [{ firstWinnerTeamId: { $exists: false } }, { firstWinnerTeamId: null }] },
     {
@@ -129,22 +147,49 @@ async function tryFinalSecretCode(eventId, team, inputSecretCode) {
     { new: true }
   );
 
-  let isFirstWinner = false;
-  if (claimedEvent && String(claimedEvent.firstWinnerTeamId) === String(team._id)) {
-    isFirstWinner = true;
-    team.isFirstWinner = true;
-  } else if (String(event.firstWinnerTeamId) === String(team._id)) {
-    isFirstWinner = true;
-    team.isFirstWinner = true;
+  const isFirstWinner = Boolean(claimedEvent && String(claimedEvent.firstWinnerTeamId) === String(team._id));
+
+  // Second/third/… teams that also solve the code are not rewarded and are
+  // shown a message saying the treasure was already claimed.
+  if (!isFirstWinner) {
+    const winnerRef = claimedEvent || event;
+    const winnerName = winnerRef.firstWinnerTeamName || "another team";
+
+    await AuditLog.create({
+      eventId,
+      targetType: "Team",
+      targetId: team._id,
+      action: "TREASURE_CODE_ALREADY_CLAIMED",
+      note: `Team "${team.teamName}" entered the correct Treasure Code, but the physical treasure was already claimed by "${winnerName}". No points awarded.`,
+    });
+
+    return {
+      success: true,
+      correct: true,
+      isFirstWinner: false,
+      alreadyClaimed: true,
+      pointsAwarded: 0,
+      treasureCodeSolvedAt: now,
+      firstWinnerInfo: {
+        isFirstWinner: false,
+        firstWinnerTeamName: winnerRef.firstWinnerTeamName,
+        firstWinnerTimestamp: winnerRef.firstWinnerTimestamp,
+      },
+      message: `The final physical treasure has already been claimed by ${winnerName}. No points awarded this time.`,
+      totalPoints: team.points,
+    };
   }
 
-  const bonusPoints = Number(settings.finalChallengePoints) || 100;
+  // --- FIRST WINNER PATH ---
+  team.treasureCodeSolvedAt = now;
+  team.isFirstWinner = true;
+
   if (bonusPoints > 0) {
     const { newPoints } = await scoreService.recordTransaction(
       team._id,
       SCORE_TRANSACTION_TYPE.FINAL_CHALLENGE,
       bonusPoints,
-      { eventId, reason: isFirstWinner ? "First Winner - Treasure Code Unlocked!" : "Treasure Code Unlocked!" }
+      { eventId, reason: "First Winner - Treasure Code Unlocked!" }
     );
     team.points = newPoints;
   }
@@ -158,28 +203,26 @@ async function tryFinalSecretCode(eventId, team, inputSecretCode) {
     eventId,
     targetType: "Team",
     targetId: team._id,
-    action: isFirstWinner ? "TREASURE_CODE_FIRST_WINNER" : "TREASURE_CODE_CORRECT",
-    note: isFirstWinner
-      ? `🏆 FIRST WINNER! Team "${team.teamName}" guessed the Treasure Code correctly at ${now.toISOString()}`
-      : `Team "${team.teamName}" guessed the Treasure Code correctly at ${now.toISOString()}`,
+    action: "TREASURE_CODE_FIRST_WINNER",
+    note: `🏆 FIRST WINNER! Team "${team.teamName}" guessed the Treasure Code correctly at ${now.toISOString()}`,
   });
 
   broadcastLeaderboardUpdate(eventId);
-  eventBus.publish(DOMAIN_EVENTS.FINAL_CHALLENGE_COMPLETED, { eventId, teamId: team._id, finalScore: team.finalScore, isFirstWinner, solvedAt: now });
-
-  const winnerInfo = isFirstWinner
-    ? { isFirstWinner: true, firstWinnerTeamName: team.teamName, firstWinnerTimestamp: now }
-    : { isFirstWinner: false, firstWinnerTeamName: claimedEvent?.firstWinnerTeamName || event.firstWinnerTeamName, firstWinnerTimestamp: claimedEvent?.firstWinnerTimestamp || event.firstWinnerTimestamp };
+  eventBus.publish(DOMAIN_EVENTS.FINAL_CHALLENGE_COMPLETED, { eventId, teamId: team._id, finalScore: team.finalScore, isFirstWinner: true, solvedAt: now });
 
   return {
     success: true,
     correct: true,
-    isFirstWinner,
+    isFirstWinner: true,
+    alreadyClaimed: false,
+    pointsAwarded: bonusPoints,
     treasureCodeSolvedAt: now,
-    firstWinnerInfo: winnerInfo,
-    message: isFirstWinner
-      ? `🏆 FIRST WINNER! PHYSICAL TREASURE UNLOCKED! +${bonusPoints} Bonus Treasure Bounty!`
-      : `PHYSICAL TREASURE UNLOCKED! +${bonusPoints} Bonus Treasure Bounty!`,
+    firstWinnerInfo: {
+      isFirstWinner: true,
+      firstWinnerTeamName: team.teamName,
+      firstWinnerTimestamp: now,
+    },
+    message: `🏆 FIRST WINNER! PHYSICAL TREASURE UNLOCKED! +${bonusPoints} Bonus Treasure Bounty!`,
     totalPoints: team.points,
   };
 }
@@ -274,7 +317,17 @@ async function processQRScan(team, rawQrId, event) {
   const settings = event.settings || {};
 
   if (!qr || !qr.active) {
-    return handleWrongScan(team, qrId, null, null, event, "Wrong QR, follow the clue and try again.");
+    // Random / invalid QR text (a code that does not exist in this event) must
+    // NOT trigger the wrong-scan penalty. Only real QRs at the wrong level do.
+    return {
+      success: true,
+      correct: false,
+      qrNotFound: true,
+      pointsLost: 0,
+      message: "No QR exists with that code in this event. Check the QR and try again.",
+      totalPoints: team.points,
+      currentLevel: team.currentLevel,
+    };
   }
 
   const clue = qr.clueId ? await Clue.findById(qr.clueId) : null;

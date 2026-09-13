@@ -77,7 +77,7 @@ router.post("/", protect, adminOnly, async (req, res, next) => {
 
 router.get("/:eventId", protect, enforceEventIsolation, async (req, res, next) => {
   try {
-    const event = req.event || await Event.findById(req.params.eventId);
+    const event = await eventService.getAdminEvent(req.params.eventId);
     res.json({ success: true, data: event });
   } catch (err) {
     next(err);

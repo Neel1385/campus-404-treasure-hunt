@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { Link, Navigate } from "react-router-dom";
 import { api, readAdmin, clearAdmin, getApiUrl } from "../api.js";
 
@@ -265,6 +265,15 @@ function Overview({ token, run, flash, selectedEventId, setSelectedEventId }) {
   const [event, setEvent] = useState(null);
   const [settingsDraft, setSettingsDraft] = useState(null);
 
+  // Ticks once per second so the Event Timer counts down live, and records the
+  // client time of the last event sync to offset server snapshot remainingMs.
+  const [overviewNow, setOverviewNow] = useState(Date.now());
+  const eventSyncedAtRef = useRef(Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setOverviewNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
   const loadEvents = useCallback(async () => {
     const data = await run(() => api.get("/events", { token }));
     const list = data || [];
@@ -286,12 +295,30 @@ function Overview({ token, run, flash, selectedEventId, setSelectedEventId }) {
     ]);
     setStats(statData.stats);
     setEvent(eventData);
+    eventSyncedAtRef.current = Date.now();
     setSettingsDraft(null);
   }, [token, selectedEventId]);
 
   useEffect(() => {
     loadEventDetails().catch(() => {});
   }, [loadEventDetails]);
+
+  // Keep the live Event Timer in sync (mirrors the player dashboard's 5s refresh).
+  useEffect(() => {
+    if (!token || !selectedEventId) return;
+    const id = setInterval(async () => {
+      try {
+        const ev = await api.get(`/events/${selectedEventId}`, { token });
+        if (ev && typeof ev === "object") {
+          setEvent(ev);
+          eventSyncedAtRef.current = Date.now();
+        }
+      } catch {
+        /* silent poll */
+      }
+    }, 5000);
+    return () => clearInterval(id);
+  }, [token, selectedEventId]);
 
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [delTeams, setDelTeams] = useState(true);
@@ -369,6 +396,20 @@ function Overview({ token, run, flash, selectedEventId, setSelectedEventId }) {
   };
 
   const effectiveStatus = event?.effectiveStatus || event?.status || "DRAFT";
+
+  const isEventRunningLive = effectiveStatus === "RUNNING" || effectiveStatus === "ACTIVE";
+  const liveEventMs = event?.remainingMs != null
+    ? Math.max(0, event.remainingMs - (isEventRunningLive ? overviewNow - eventSyncedAtRef.current : 0))
+    : null;
+  const fmtClock = (ms) => {
+    if (ms == null || ms <= 0) return "00:00";
+    const total = Math.floor(ms / 1000);
+    const h = Math.floor(total / 3600);
+    const m = Math.floor((total % 3600) / 60);
+    const s = total % 60;
+    const pad = (n) => String(n).padStart(2, "0");
+    return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`;
+  };
 
   return (
     <>
@@ -529,6 +570,12 @@ function Overview({ token, run, flash, selectedEventId, setSelectedEventId }) {
                 <div className="lbl">{lbl}</div>
               </div>
             ))}
+            <div className="stat">
+              <div className="num" style={{ color: effectiveStatus === "ENDED" ? "var(--danger)" : "var(--ok)", fontVariantNumeric: "tabular-nums" }}>
+                🧭 {fmtClock(liveEventMs)}
+              </div>
+              <div className="lbl">⏱️ Event Timer Left</div>
+            </div>
           </div>
         </div>
       )}
@@ -607,7 +654,7 @@ function Overview({ token, run, flash, selectedEventId, setSelectedEventId }) {
               </div>
 
               <h4>Wrong QR Blocking Engine & Clue Settings</h4>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12 }}>
                 <div className="field">
                   <label>Clues Per Team (Random Pool Limit)</label>
                   <input
@@ -628,6 +675,19 @@ function Overview({ token, run, flash, selectedEventId, setSelectedEventId }) {
                     onChange={(e) => setSettingsDraft({
                       ...settingsDraft,
                       settings: { ...settingsDraft.settings, finalSecretCode: e.target.value }
+                    })}
+                  />
+                </div>
+                <div className="field">
+                  <label>Physical Treasure Points</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="5"
+                    value={settingsDraft.settings?.finalChallengePoints ?? 100}
+                    onChange={(e) => setSettingsDraft({
+                      ...settingsDraft,
+                      settings: { ...settingsDraft.settings, finalChallengePoints: Number(e.target.value) }
                     })}
                   />
                 </div>

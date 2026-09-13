@@ -257,11 +257,10 @@ test("dummy QR scans trigger wrong scan handling", async () => {
 test("wrong QR blocking engine blocks team after threshold and decrements scans", async () => {
   const { token } = await registerAndLogin("BlockTest");
 
-  // Scan #1 wrong
-  await request(app).post("/api/game/scan").set(auth(token)).send({ qrId: "WRONG1" });
-  // Scan #2 wrong (reaches threshold 2)
-  const res = await request(app).post("/api/game/scan").set(auth(token)).send({ qrId: "WRONG2" });
-
+  // Real wrong-level QRs (a decoy DUMMY QR) count toward the blocking engine.
+  // Random/non-existent codes do NOT (they are handled as "no QR exists").
+  await request(app).post("/api/game/scan").set(auth(token)).send({ qrId: "DUMMY1" });
+  const res = await request(app).post("/api/game/scan").set(auth(token)).send({ qrId: "DUMMY1" });
   assert.equal(res.body.data.blocked, true);
 
   const blockedRes = await request(app).post("/api/game/scan").set(auth(token)).send({ qrId: "AAA111" });
@@ -405,11 +404,14 @@ test("scan-to-solve flow grants points, next clue, treasure fragment and side qu
   assert.ok(Array.isArray(scanRes.body.data.collectedSecretFragments));
   assert.equal(scanRes.body.data.currentLevel, 2);
 
-  // Wrong QR scan returns explicit error message and does not advance level
+  // Random/invalid QR text (code does not exist) deducts NO points
   const wrongScanRes = await request(app).post("/api/game/scan").set(auth(token)).send({ qrId: "WRONG_FOR_LEVEL2" });
   assert.equal(wrongScanRes.status, 200);
   assert.equal(wrongScanRes.body.data.correct, false);
-  assert.match(wrongScanRes.body.message, /Wrong QR, follow the clue and try again/i);
+  assert.equal(wrongScanRes.body.data.qrNotFound, true);
+  assert.equal(wrongScanRes.body.data.pointsLost, 0);
+  assert.match(wrongScanRes.body.message, /No QR exists/i);
+  assert.equal(wrongScanRes.body.data.totalPoints, 10);
 });
 
 test("side quest wrong answer does not deduct points", async () => {
@@ -573,4 +575,157 @@ test("event lifecycle: DRAFT/PAUSED/ENDED block scans, RUNNING allows them, /tea
   assert.equal(res.status, 409);
   assert.equal(res.body.code, "EVENT_ENDED");
   assert.equal(await meStatus(), EVENT_STATUS.ENDED);
+});
+
+test("final treasure code: first team claims the bounty, later teams earn no points", async () => {
+  const finalEvent = await Event.create({
+    name: "Final Code Hunt",
+    status: EVENT_STATUS.RUNNING,
+    settings: { finalSecretCode: "CAMPUS404", finalChallengePoints: 100, wrongScanPenaltyEnabled: false },
+  });
+  await Clue.create({
+    eventId: finalEvent._id,
+    clueNumber: 1,
+    title: "Final Clue",
+    description: "Find the hidden treasure site.",
+    checkpointName: "Treasure Site",
+    answerType: "TEXT",
+    correctAnswer: "treasure",
+    points: 10,
+  });
+
+  const first = await registerAndLogin("CodeFirst", finalEvent);
+  const second = await registerAndLogin("CodeSecond", finalEvent);
+  assert.ok(first.token);
+  assert.ok(second.token);
+
+  const tryCode = (tok) =>
+    request(app).post(`/api/events/${finalEvent._id}/final-challenge/try-code`).set(auth(tok)).send({ secretCode: "CAMPUS404" });
+
+  // First correct entry: wins the bounty (+100), marked as first winner.
+  const firstRes = await tryCode(first.token);
+  assert.equal(firstRes.status, 200);
+  assert.equal(firstRes.body.data.isFirstWinner, true);
+  assert.equal(firstRes.body.data.alreadyClaimed, false);
+  assert.equal(firstRes.body.data.pointsAwarded, 100);
+  assert.equal(firstRes.body.data.totalPoints, 100);
+  assert.match(firstRes.body.data.message, /FIRST WINNER/i);
+
+  // Same team retrying the code must NOT be rewarded a second time.
+  const retryRes = await tryCode(first.token);
+  assert.equal(retryRes.status, 200);
+  assert.equal(retryRes.body.data.alreadyClaimed, true);
+  assert.equal(retryRes.body.data.pointsAwarded, 0);
+  assert.equal(retryRes.body.data.totalPoints, 100);
+
+  // Another team entering the correct key: no points, "already claimed" message.
+  const secondRes = await tryCode(second.token);
+  assert.equal(secondRes.status, 200);
+  assert.equal(secondRes.body.data.correct, true);
+  assert.equal(secondRes.body.data.isFirstWinner, false);
+  assert.equal(secondRes.body.data.alreadyClaimed, true);
+  assert.equal(secondRes.body.data.pointsAwarded, 0);
+  assert.equal(secondRes.body.data.totalPoints, 0);
+  assert.equal(secondRes.body.data.firstWinnerInfo.firstWinnerTeamName, "Team CodeFirst");
+  assert.match(secondRes.body.data.message, /already been claimed/i);
+
+  // Wrong code still rejected even after the claim.
+  const wrongCode = await request(app)
+    .post(`/api/events/${finalEvent._id}/final-challenge/try-code`)
+    .set(auth(second.token))
+    .send({ secretCode: "WRONG-OOO" });
+  assert.equal(wrongCode.status, 200);
+  assert.equal(wrongCode.body.data.correct, false);
+  assert.ok(wrongCode.body.data.message);
+
+  // The event records the actual first winner.
+  const storedEvent = await Event.findById(finalEvent._id);
+  const storedWinner = await Team.findOne({ eventId: finalEvent._id, teamName: "Team CodeFirst" });
+  assert.equal(String(storedEvent.firstWinnerTeamId), String(storedWinner._id));
+  assert.equal(storedEvent.firstWinnerTeamName, "Team CodeFirst");
+});
+
+test("random invalid QR text deducts no points; a real wrong-level QR still deducts", async () => {
+  const qrEvent = await Event.create({
+    name: "QR Scoring Hunt",
+    status: EVENT_STATUS.RUNNING,
+    settings: {
+      wrongScanPenaltyEnabled: true,
+      wrongScanPenalty: 5,
+      allowNegativeScore: true,
+      wrongScanBlockingEnabled: false,
+    },
+  });
+
+  const c1 = await Clue.create({
+    eventId: qrEvent._id,
+    clueNumber: 1,
+    title: "Start Point",
+    description: "Begin here.",
+    checkpointName: "Start",
+    answerType: "TEXT",
+    correctAnswer: "start",
+    points: 10,
+  });
+  const c2 = await Clue.create({
+    eventId: qrEvent._id,
+    clueNumber: 2,
+    title: "End Point",
+    description: "Finish here.",
+    checkpointName: "End",
+    answerType: "TEXT",
+    correctAnswer: "end",
+    points: 20,
+    isFinal: true,
+  });
+  await QRCode.create([
+    { eventId: qrEvent._id, qrId: "L1QR", clueId: c1._id, type: "NORMAL", checkpointName: "Start", active: true },
+    { eventId: qrEvent._id, qrId: "L2QR", clueId: c2._id, type: "NORMAL", checkpointName: "End", active: true },
+  ]);
+
+  const { token } = await registerAndLogin("ScoringTeamX", qrEvent);
+  const randomScan = await request(app).post("/api/game/scan").set(auth(token)).send({ qrId: "lhjerbfuref" });
+  assert.equal(randomScan.status, 200);
+  assert.equal(randomScan.body.data.correct, false);
+  assert.equal(randomScan.body.data.qrNotFound, true);
+  assert.equal(randomScan.body.data.pointsLost, 0);
+  assert.equal(randomScan.body.data.totalPoints, 0);
+  assert.match(randomScan.body.message, /No QR exists/i);
+
+  // A REAL QR for a different level still costs the wrong-scan penalty.
+  const wrongLevelScan = await request(app).post("/api/game/scan").set(auth(token)).send({ qrId: "L2QR" });
+  assert.equal(wrongLevelScan.status, 200);
+  assert.equal(wrongLevelScan.body.data.correct, false);
+  assert.equal(wrongLevelScan.body.data.qrNotFound, undefined);
+  assert.equal(wrongLevelScan.body.data.pointsLost, 5);
+  assert.equal(wrongLevelScan.body.data.totalPoints, -5);
+  assert.match(wrongLevelScan.body.message, /Wrong QR/i);
+
+  // The correct QR for the team's actual level still works and awards points.
+  const correctScan = await request(app).post("/api/game/scan").set(auth(token)).send({ qrId: "L1QR" });
+  assert.equal(correctScan.status, 200);
+  assert.equal(correctScan.body.data.correct, true);
+});
+
+test("admin event details expose effectiveStatus and remainingMs for the live timer", async () => {
+  const timedEvent = await Event.create({
+    name: "Timer Admin View",
+    status: EVENT_STATUS.RUNNING,
+    startTime: new Date(Date.now() - 60000),
+    endTime: new Date(Date.now() + 1800000),
+    duration: 60,
+  });
+
+  const adminLogin = await request(app).post("/api/admin/auth/login").send({
+    email: TEST_ADMIN.email,
+    password: TEST_ADMIN.password,
+  });
+  const adminToken = adminLogin.body.data.token;
+
+  const res = await request(app).get(`/api/events/${timedEvent._id}`).set(auth(adminToken));
+  assert.equal(res.status, 200);
+  assert.ok(res.body.data);
+  assert.equal(res.body.data.effectiveStatus, EVENT_STATUS.RUNNING);
+  assert.ok(typeof res.body.data.remainingMs === "number");
+  assert.ok(res.body.data.remainingMs > 0);
 });

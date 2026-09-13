@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../api.js";
 import { useAuth } from "../auth.jsx";
@@ -106,6 +106,13 @@ export default function Dashboard() {
   const [notice, setNotice] = useState("");
   const [busy, setBusy] = useState(false);
   const [nowTs, setNowTs] = useState(Date.now());
+  // Client timestamp of the last /teams/me sync, used to tick remainingMs down
+  // every second without waiting for a page refresh.
+  const meSyncedAtRef = useRef(Date.now());
+  const syncMe = useCallback((value) => {
+    meSyncedAtRef.current = Date.now();
+    setMe(value);
+  }, []);
 
   useEffect(() => {
     const timer = setInterval(() => setNowTs(Date.now()), 1000);
@@ -133,7 +140,7 @@ export default function Dashboard() {
     let teamEventId = currentEvent?._id || "";
     try {
       const meData = await api.get("/teams/me", { token, eventId: null });
-      setMe(meData);
+      syncMe(meData);
       teamEventId = meData?.team?.eventId || meData?.event?.eventId || teamEventId;
 
       await syncPending(teamEventId);
@@ -163,7 +170,7 @@ export default function Dashboard() {
       if (!navigator.onLine && teamEventId) {
         const cached = await getCachedTeamSession(teamEventId);
         if (cached) {
-          setMe(cached.meData);
+          syncMe(cached.meData);
           setClue(cached.clueData);
           setHistory(cached.histData?.history || []);
           setSideQuests(cached.questsData || []);
@@ -199,7 +206,7 @@ export default function Dashboard() {
     const id = setInterval(async () => {
       try {
         const fresh = await api.get("/teams/me", { token, eventId: null });
-        setMe((prev) => (prev && fresh ? { ...prev, ...fresh } : prev));
+        syncMe((prev) => (prev && fresh ? { ...prev, ...fresh } : prev));
       } catch {
         /* ignore */
       }
@@ -293,6 +300,11 @@ export default function Dashboard() {
   const isComplete = teamData?.status === "completed" || teamData?.status === "COMPLETED";
   const teamStatus = me?.event?.status || currentEvent?.status;
   const teamRemainingMs = me?.event?.remainingMs;
+  const meEventStatus = me?.event?.status;
+  const isEventRunningLive = meEventStatus === "RUNNING" || meEventStatus === "ACTIVE";
+  const liveRemainingMs = me?.event?.remainingMs != null
+    ? Math.max(0, me.event.remainingMs - (isEventRunningLive ? nowTs - meSyncedAtRef.current : 0))
+    : null;
   const isEventInactive = teamStatus === "DRAFT" || teamStatus === "PAUSED" || teamStatus === "ENDED";
   const isTimeUp = (teamRemainingMs != null && teamRemainingMs <= 0 && teamStatus !== "RUNNING" && teamStatus !== "ACTIVE") || teamStatus === "ENDED";
   const isTreasureCodeSolved = !!teamData?.treasureCodeSolvedAt;
@@ -488,7 +500,7 @@ export default function Dashboard() {
             <div className="lbl">🧩 Secret Code Fragments</div>
           </div>
           <div className="stat">
-            <div className="num">{fmtMs(me?.event?.remainingMs)}</div>
+            <div className="num">{fmtMs(liveRemainingMs)}</div>
             <div className="lbl">🧭 Timer</div>
           </div>
         </div>
