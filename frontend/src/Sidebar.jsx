@@ -41,6 +41,7 @@ export default function Sidebar() {
     { to: "/scan", icon: "📷", label: "Scan QR Code" },
     { to: "/map", icon: "🗺️", label: "Level Map" },
     { to: "/bounty-history", icon: "📜", label: "Score History" },
+    { to: "/how-to-play", icon: "📖", label: "How to Play" },
   ];
 
   const guestNav = [
@@ -125,15 +126,6 @@ export default function Sidebar() {
               <span className="pirate-sidebar-link-label">{item.label}</span>
             </Link>
           ))}
-
-          <Link
-            to="/how-to-play"
-            className={`pirate-sidebar-link ${location.pathname === "/how-to-play" ? "active" : ""}`}
-            onClick={() => setOpen(false)}
-          >
-            <span className="pirate-sidebar-link-icon">📖</span>
-            <span className="pirate-sidebar-link-label">How to Play</span>
-          </Link>
         </nav>
 
         {/* Divider */}

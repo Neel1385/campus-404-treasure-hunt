@@ -61,11 +61,13 @@ export function readCurrentEventId() {
   }
 }
 
-async function http(path, { method = "GET", body, token, timeoutMs = 15000 } = {}) {
+async function http(path, { method = "GET", body, token, timeoutMs = 15000, eventId } = {}) {
   const headers = { "Content-Type": "application/json" };
   if (token) headers.Authorization = `Bearer ${token}`;
 
-  const currentEventId = readCurrentEventId();
+  // Explicit `eventId` opt wins. Pass `eventId: null` to disable the lookup
+  // entirely (player calls scope by the JWT's team, not by ui-selected event).
+  const currentEventId = eventId === undefined ? readCurrentEventId() : eventId;
   let fullPath = path;
   if (currentEventId && !path.includes("eventId=")) {
     const separator = path.includes("?") ? "&" : "?";
