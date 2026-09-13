@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../auth.jsx";
 import { cacheTeamSession } from "../offlineStorage.js";
+import { EVENT_KEY } from "../api.js";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -22,6 +23,9 @@ export default function Login() {
         navigate("/admin", { replace: true });
         return;
       }
+      // Player session: forget any ui-selected event from a previous session so
+      // game flows scope to this team's own event, not a stale localStorage pick.
+      localStorage.removeItem(EVENT_KEY);
       if (res?.team?.eventId) {
         await cacheTeamSession(res.team.eventId, { meData: { team: res.team } });
       }

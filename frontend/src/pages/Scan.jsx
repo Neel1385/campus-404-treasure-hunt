@@ -32,6 +32,7 @@ export default function Scan() {
   const [camError, setCamError] = useState("");
   const [showWarning, setShowWarning] = useState(true);
   const [teamData, setTeamData] = useState(null);
+  const [teamEvent, setTeamEvent] = useState(null);
 
   const scannerRef = useRef(null);
   const stoppedRef = useRef(false);
@@ -39,10 +40,13 @@ export default function Scan() {
 
   useEffect(() => {
     if (isLoggedIn && token) {
-      const param = currentEvent?._id ? `?eventId=${currentEvent._id}` : "";
-      api.get(`/teams/me${param}`, { token }).then((d) => setTeamData(d.team)).catch(() => {});
+      api.get("/teams/me", { token, eventId: null })
+        .then((d) => { setTeamData(d.team); setTeamEvent(d.event); })
+        .catch(() => {});
     }
-  }, [isLoggedIn, token, currentEvent]);
+  }, [isLoggedIn, token]);
+
+  const teamEventId = teamData?.eventId || currentEvent?._id;
 
   const runScan = async (id) => {
     if (!isLoggedIn) {
@@ -55,13 +59,14 @@ export default function Scan() {
     setBusy(true);
     try {
       const payload = { qrId: id };
-      if (currentEvent?._id) payload.eventId = currentEvent._id;
-      const data = await api.post("/game/scan", payload, { token });
+      if (teamEventId) payload.eventId = teamEventId;
+      const data = await api.post("/game/scan", payload, { token, eventId: null });
       setResult(data);
 
       // Refresh team data
-      const param = currentEvent?._id ? `?eventId=${currentEvent._id}` : "";
-      api.get(`/teams/me${param}`, { token }).then((d) => setTeamData(d.team)).catch(() => {});
+      api.get("/teams/me", { token, eventId: null })
+        .then((d) => { setTeamData(d.team); setTeamEvent(d.event); })
+        .catch(() => {});
 
       // Auto-close scanning popup / modal and navigate back to dashboard after 2.5 seconds on successful scan
       if (data && data.success && data.correct) {
@@ -125,7 +130,12 @@ export default function Scan() {
       );
     } catch (err) {
       setCamMode(false);
-      setCamError(err.message || "Could not start the camera. Allow camera access and try again.");
+      const denied = err && (err.name === "NotAllowedError" || err.name === "SecurityError" || /permission|denied/i.test(err.message || ""));
+      setCamError(
+        denied
+          ? "Camera permission was denied. Allow camera access (lock icon next to the URL in your browser), then try again."
+          : err.message || "Could not start the camera. Allow camera access and try again."
+      );
     }
   };
 
@@ -145,22 +155,23 @@ export default function Scan() {
 
   const currentLevel = teamData?.currentLevel || teamData?.currentClue || 1;
   const currentPoints = teamData?.points ?? 0;
-  const isEventInactive = currentEvent?.status === "DRAFT" || currentEvent?.status === "PAUSED" || currentEvent?.status === "ENDED";
+  const teamStatus = teamEvent?.status || currentEvent?.status;
+  const isEventInactive = teamStatus === "DRAFT" || teamStatus === "PAUSED" || teamStatus === "ENDED";
 
   return (
     <div className="container narrow">
-      <h1 style={{ marginTop: 56 }}>🗿 Scan QR Code {currentEvent ? `(${currentEvent.name})` : ""}</h1>
+      <h1 style={{ marginTop: 56 }}>🗿 Scan QR Code {teamEvent?.name || currentEvent ? `(${teamEvent?.name || currentEvent?.name})` : ""}</h1>
 
       {isEventInactive && (
         <div className="alert warn animate-fade-in" style={{ padding: "20px", textAlign: "center", marginBottom: 24, border: "2px solid var(--gold)" }}>
           <div style={{ fontSize: 36, marginBottom: 4 }}>
-            {currentEvent?.status === "PAUSED" ? "⏸️" : "📝"}
+            {teamStatus === "PAUSED" ? "⏸️" : "📝"}
           </div>
           <h3 style={{ margin: 0, color: "var(--gold)" }}>
-            EVENT IS CURRENTLY {currentEvent?.status || "INACTIVE"}
+            EVENT IS CURRENTLY {teamStatus || "INACTIVE"}
           </h3>
           <p style={{ margin: "8px 0 0", fontSize: 14, color: "var(--text)" }}>
-            {currentEvent?.status === "PAUSED"
+            {teamStatus === "PAUSED"
               ? "The event is currently PAUSED by the organizer. Camera scanning is locked."
               : "The event is in DRAFT status. QR scanning is disabled until the event is started."}
           </p>

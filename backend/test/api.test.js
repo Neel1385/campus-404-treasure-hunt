@@ -462,3 +462,115 @@ test("QR ZIP endpoint generates valid archive with styled vector QRs", async () 
   assert.equal(res.headers["content-type"], "application/zip");
   assert.ok(res.body.length > 0);
 });
+
+// ---------------------------------------------------------------------------
+// Regression: player-facing event status must reflect the TEAM's OWN event,
+// not the newest/global event (the live-site "Event is Ended on login" bug).
+// ---------------------------------------------------------------------------
+
+test("/teams/me reports the team's own event status even when newer events exist", async () => {
+  // Newest event on the platform is a RUNNING one different from the team's.
+  await Event.create({ name: "Newer Running Event", status: EVENT_STATUS.RUNNING });
+
+  const myEvent = await Event.create({ name: "My Draft Event", status: EVENT_STATUS.DRAFT });
+  await Clue.create({
+    eventId: myEvent._id,
+    clueNumber: 1,
+    title: "Draft Clue",
+    description: "Stands near the gate.",
+    checkpointName: "The Gate",
+    answerType: "TEXT",
+    correctAnswer: "gate",
+    points: 10,
+  });
+  const { token, team } = await registerAndLogin("MyOwnEvent", myEvent);
+  assert.equal(String(team.eventId), String(myEvent._id));
+
+  // While my event is DRAFT, /teams/me must report DRAFT (not the newer RUNNING event).
+  let me = await request(app).get("/api/teams/me").set(auth(token));
+  assert.equal(me.status, 200);
+  assert.equal(me.body.data.event.status, EVENT_STATUS.DRAFT);
+  assert.equal(me.body.data.event.name, "My Draft Event");
+  assert.equal(me.body.data.event.remainingMs, 0);
+
+  // Start MY event; /teams/me must switch to RUNNING even though a newer event exists.
+  const adminLogin = await request(app).post("/api/admin/auth/login").send({
+    email: TEST_ADMIN.email,
+    password: TEST_ADMIN.password,
+  });
+  const adminToken = adminLogin.body.data.token;
+  const startRes = await request(app)
+    .post(`/api/events/${myEvent._id}/status`)
+    .set(auth(adminToken))
+    .send({ status: EVENT_STATUS.RUNNING });
+  assert.equal(startRes.status, 200);
+
+  me = await request(app).get("/api/teams/me").set(auth(token));
+  assert.equal(me.body.data.event.status, EVENT_STATUS.RUNNING);
+  assert.ok(me.body.data.event.remainingMs > 0);
+});
+
+test("event lifecycle: DRAFT/PAUSED/ENDED block scans, RUNNING allows them, /teams/me tracks status", async () => {
+  const lifecycleEvent = await Event.create({
+    name: "Lifecycle Hunt",
+    status: EVENT_STATUS.DRAFT,
+    settings: { wrongScanPenaltyEnabled: false },
+  });
+  const clue = await Clue.create({
+    eventId: lifecycleEvent._id,
+    clueNumber: 1,
+    title: "Lifecycle Clue",
+    description: "Walk to the fountain.",
+    checkpointName: "Fountain",
+    answerType: "TEXT",
+    correctAnswer: "fountain",
+    points: 10,
+  });
+  await QRCode.create({ eventId: lifecycleEvent._id, qrId: "LIFE001", clueId: clue._id, type: "NORMAL", checkpointName: "Fountain", active: true });
+
+  const teamRes = await registerAndLogin("LifecycleTeam", lifecycleEvent);
+  assert.ok(teamRes.token);
+
+  const adminLogin = await request(app).post("/api/admin/auth/login").send({
+    email: TEST_ADMIN.email,
+    password: TEST_ADMIN.password,
+  });
+  const adminToken = adminLogin.body.data.token;
+  const setStatus = (status) => request(app).post(`/api/events/${lifecycleEvent._id}/status`).set(auth(adminToken)).send({ status });
+  const scan = () => request(app).post("/api/game/scan").set(auth(teamRes.token)).send({ qrId: "LIFE001" });
+  const meStatus = async () => (await request(app).get("/api/teams/me").set(auth(teamRes.token))).body.data.event.status;
+
+  // DRAFT -> scan blocked, me reflects DRAFT
+  let res = await scan();
+  assert.equal(res.status, 409);
+  assert.equal(res.body.code, "EVENT_DRAFT");
+  assert.equal(await meStatus(), EVENT_STATUS.DRAFT);
+
+  // Start -> scan works, me reflects RUNNING
+  assert.equal((await setStatus(EVENT_STATUS.RUNNING)).status, 200);
+  res = await scan();
+  assert.equal(res.status, 200);
+  assert.equal(res.body.data.correct, true);
+  assert.equal(res.body.data.clue.clueNumber, 1);
+  assert.equal(await meStatus(), EVENT_STATUS.RUNNING);
+
+  // Pause -> scan blocked, me reflects PAUSED
+  assert.equal((await setStatus(EVENT_STATUS.PAUSED)).status, 200);
+  res = await scan();
+  assert.equal(res.status, 409);
+  assert.equal(res.body.code, "EVENT_PAUSED");
+  assert.equal(await meStatus(), EVENT_STATUS.PAUSED);
+
+  // Resume -> scan allowed again
+  assert.equal((await setStatus(EVENT_STATUS.RUNNING)).status, 200);
+  res = await scan();
+  assert.equal(res.status, 200);
+  assert.equal(await meStatus(), EVENT_STATUS.RUNNING);
+
+  // End -> scan blocked, me reflects ENDED
+  assert.equal((await setStatus(EVENT_STATUS.ENDED)).status, 200);
+  res = await scan();
+  assert.equal(res.status, 409);
+  assert.equal(res.body.code, "EVENT_ENDED");
+  assert.equal(await meStatus(), EVENT_STATUS.ENDED);
+});

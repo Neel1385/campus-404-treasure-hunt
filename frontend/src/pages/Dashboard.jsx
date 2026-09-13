@@ -93,7 +93,7 @@ function SideQuestItem({ quest, completed, questAnswers, setQuestAnswers, submit
 
 export default function Dashboard() {
   const { team, token, logout } = useAuth();
-  const { currentEvent } = useEvent();
+  const { currentEvent, eventsList, selectEvent } = useEvent();
   const navigate = useNavigate();
   const [me, setMe] = useState(null);
   const [clue, setClue] = useState(null);
@@ -112,12 +112,12 @@ export default function Dashboard() {
     return () => clearInterval(timer);
   }, []);
 
-  const syncPending = useCallback(async () => {
-    if (!currentEvent?._id || !token || !navigator.onLine) return;
+  const syncPending = useCallback(async (eventId) => {
+    if (!eventId || !token || !navigator.onLine) return;
     try {
-      const ops = await getPendingOperations(currentEvent._id);
+      const ops = await getPendingOperations(eventId);
       if (ops && ops.length > 0) {
-        const syncRes = await api.post(`/events/${currentEvent._id}/sync`, { operations: ops }, { token });
+        const syncRes = await api.post(`/events/${eventId}/sync`, { operations: ops }, { token, eventId: null });
         if (syncRes && syncRes.length > 0) {
           for (const item of syncRes) {
             await removePendingOperation(item.operationId);
@@ -127,28 +127,31 @@ export default function Dashboard() {
     } catch {
       /* ignore sync errors */
     }
-  }, [currentEvent?._id, token]);
+  }, [token]);
 
   const load = useCallback(async () => {
-    const eventIdParam = currentEvent?._id ? `?eventId=${currentEvent._id}` : "";
+    let teamEventId = currentEvent?._id || "";
     try {
-      await syncPending();
+      const meData = await api.get("/teams/me", { token, eventId: null });
+      setMe(meData);
+      teamEventId = meData?.team?.eventId || meData?.event?.eventId || teamEventId;
 
-      const [meData, clueData, histData, questsData, assignData] = await Promise.all([
-        api.get(`/teams/me${eventIdParam}`, { token }),
-        api.get(`/game/current-clue${eventIdParam}`, { token }),
-        api.get(`/game/score-history${eventIdParam}`, { token }),
-        currentEvent?._id ? api.get(`/events/${currentEvent._id}/side-quests`, { token }).catch(() => []) : Promise.resolve([]),
-        api.get(`/game/my-assignments${eventIdParam}`, { token }).catch(() => ({ assignments: [] })),
+      await syncPending(teamEventId);
+
+      const eventIdParam = teamEventId ? `?eventId=${teamEventId}` : "";
+      const [clueData, histData, questsData, assignData] = await Promise.all([
+        api.get(`/game/current-clue${eventIdParam}`, { token, eventId: null }),
+        api.get(`/game/score-history${eventIdParam}`, { token, eventId: null }),
+        teamEventId ? api.get(`/events/${teamEventId}/side-quests`, { token, eventId: null }).catch(() => []) : Promise.resolve([]),
+        api.get(`/game/my-assignments${eventIdParam}`, { token, eventId: null }).catch(() => ({ assignments: [] })),
       ]);
 
-      setMe(meData);
       setClue(clueData);
       setHistory(histData.history || []);
       setSideQuests(Array.isArray(questsData) ? questsData : []);
 
-      if (currentEvent?._id) {
-        await cacheTeamSession(currentEvent._id, {
+      if (teamEventId) {
+        await cacheTeamSession(teamEventId, {
           meData,
           clueData,
           histData,
@@ -157,8 +160,8 @@ export default function Dashboard() {
         });
       }
     } catch (err) {
-      if (!navigator.onLine && currentEvent?._id) {
-        const cached = await getCachedTeamSession(currentEvent._id);
+      if (!navigator.onLine && teamEventId) {
+        const cached = await getCachedTeamSession(teamEventId);
         if (cached) {
           setMe(cached.meData);
           setClue(cached.clueData);
@@ -169,7 +172,16 @@ export default function Dashboard() {
       }
       throw err;
     }
-  }, [token, currentEvent, syncPending]);
+  }, [token, currentEvent?._id, syncPending]);
+
+  // Align the ui-wide selected event to the team's own event so themes, event
+  // name and rules track the right event (fires when the events list refreshes).
+  useEffect(() => {
+    const teamId = me?.team?.eventId;
+    if (!teamId) return;
+    const match = Array.isArray(eventsList) ? eventsList.find((e) => String(e._id) === String(teamId)) : null;
+    if (match && String(currentEvent?._id) !== String(teamId)) selectEvent(match);
+  }, [me?.team?.eventId, eventsList, currentEvent?._id, selectEvent]);
 
   useEffect(() => {
     load().catch((err) => {
@@ -179,6 +191,21 @@ export default function Dashboard() {
       } else setError(err.message);
     });
   }, [load, logout, navigate]);
+
+  // Lightweight periodic refresh of the team's own event status + timer so
+  // pauses / expiry are reflected while the dashboard stays open.
+  useEffect(() => {
+    if (!token) return;
+    const id = setInterval(async () => {
+      try {
+        const fresh = await api.get("/teams/me", { token, eventId: null });
+        setMe((prev) => (prev && fresh ? { ...prev, ...fresh } : prev));
+      } catch {
+        /* ignore */
+      }
+    }, 5000);
+    return () => clearInterval(id);
+  }, [token]);
 
   const submitAnswer = async (e) => {
     e.preventDefault();
@@ -227,7 +254,7 @@ export default function Dashboard() {
 
   const submitFinalSecretCode = async (e) => {
     e.preventDefault();
-    const targetEventId = teamData?.eventId || currentEvent?._id;
+    const targetEventId = teamData?.eventId || me?.team?.eventId || currentEvent?._id;
     if (!targetEventId || !secretCodeInput) return;
     setError("");
     setNotice("");
@@ -245,13 +272,14 @@ export default function Dashboard() {
   };
 
   const submitSideQuest = async (questId) => {
-    if (!currentEvent?._id) return;
+    const targetEventId = teamData?.eventId || me?.team?.eventId || currentEvent?._id;
+    if (!targetEventId) return;
     const ans = questAnswers[questId] || "";
     setError("");
     setNotice("");
     setBusy(true);
     try {
-      const res = await api.post(`/events/${currentEvent._id}/side-quests/${questId}/complete`, { answer: ans }, { token });
+      const res = await api.post(`/events/${targetEventId}/side-quests/${questId}/complete`, { answer: ans }, { token });
       setNotice(res.message || "Side quest completed!");
       await load();
     } catch (err) {
@@ -263,8 +291,10 @@ export default function Dashboard() {
 
   const teamData = me?.team || team;
   const isComplete = teamData?.status === "completed" || teamData?.status === "COMPLETED";
-  const isEventInactive = currentEvent?.status === "DRAFT" || currentEvent?.status === "PAUSED" || currentEvent?.status === "ENDED";
-  const isTimeUp = (me?.event?.remainingMs != null && me.event.remainingMs <= 0 && currentEvent?.status !== "RUNNING" && currentEvent?.status !== "ACTIVE") || me?.event?.status === "ENDED" || currentEvent?.status === "ENDED";
+  const teamStatus = me?.event?.status || currentEvent?.status;
+  const teamRemainingMs = me?.event?.remainingMs;
+  const isEventInactive = teamStatus === "DRAFT" || teamStatus === "PAUSED" || teamStatus === "ENDED";
+  const isTimeUp = (teamRemainingMs != null && teamRemainingMs <= 0 && teamStatus !== "RUNNING" && teamStatus !== "ACTIVE") || teamStatus === "ENDED";
   const isTreasureCodeSolved = !!teamData?.treasureCodeSolvedAt;
   const isTreasureCodeInputDisabled = busy || isTimeUp || isEventInactive || isTreasureCodeSolved;
   const isInputDisabled = busy || isTimeUp || isEventInactive || isComplete;
@@ -279,6 +309,30 @@ export default function Dashboard() {
       <div className="container">
         {error && <div className="alert error">{error}</div>}
         {notice && <div className="alert success">{notice}</div>}
+
+        {/* Event not live (paused / not started / waiting) - visible signal */}
+        {(teamStatus === "PAUSED" || teamStatus === "DRAFT" || teamStatus === "READY" || teamStatus === "NOT_STARTED") && (
+          <div
+            className="alert warn animate-fade-in"
+            style={{
+              padding: "20px",
+              textAlign: "center",
+              marginBottom: 24,
+              border: "2px solid var(--gold)",
+              background: teamStatus === "PAUSED" ? "rgba(245, 158, 11, 0.12)" : "rgba(100, 116, 139, 0.2)",
+            }}
+          >
+            <div style={{ fontSize: 32, marginBottom: 4 }}>{teamStatus === "PAUSED" ? "⏸️" : "📝"}</div>
+            <h3 style={{ margin: 0, color: "var(--gold)", textTransform: "uppercase", letterSpacing: "0.04em" }}>
+              EVENT IS CURRENTLY {teamStatus || "INACTIVE"}
+            </h3>
+            <p style={{ margin: "8px 0 0", fontSize: 14, color: "var(--text)" }}>
+              {teamStatus === "PAUSED"
+                ? "The event is currently PAUSED by the organizer. Scanning and submissions are locked until it resumes."
+                : "The event has not started yet. Set sail when the organizer begins the hunt."}
+            </p>
+          </div>
+        )}
 
         {/* Time Is Up Banner / Lockout */}
         {isTimeUp && (
@@ -342,54 +396,100 @@ export default function Dashboard() {
           </div>
         )}
 
-        <div className="spread" style={{ marginBottom: 24 }}>
-          <div>
-            <h2 style={{ margin: "0 0 4px" }}>🏴‍☠️ {teamData?.teamName} {currentEvent ? `(${currentEvent.name})` : ""}</h2>
-            <span className="muted mono" style={{ fontSize: 13 }}>{teamData?.teamId}</span>
+        <div style={{ marginBottom: 16 }}>
+          <h2 style={{ margin: "0 0 4px" }}>🏴‍☠️ {teamData?.teamName} {me?.event?.name || currentEvent ? `(${me?.event?.name || currentEvent?.name})` : ""}</h2>
+          <span className="muted mono" style={{ fontSize: 13 }}>{teamData?.teamId}</span>
+        </div>
+
+        {/* Current Clue - pinned near the top so the next riddle is visible without scrolling */}
+        {isComplete ? (
+          <div className="card" style={{ textAlign: "center", padding: 28, marginBottom: 16 }}>
+            <div style={{ fontSize: 48 }}>🏴‍☠️</div>
+            <h2>TREASURE FOUND!</h2>
+            <p className="muted">
+              Final Points: <strong className="mono">{teamData.finalScore}</strong>
+            </p>
           </div>
-          <div className="stat-grid" style={{ width: "100%", marginTop: 16 }}>
-            <div className="stat">
-              <div className="num" style={{ color: "#f5a623" }}>{teamData?.points ?? 0}</div>
-              <div className="lbl">💰 Points</div>
+        ) : clue && (clue.clue || clue.description) ? (
+          <div className="card" style={{ marginBottom: 16, border: "1px solid rgba(212, 168, 67, 0.35)", background: "var(--bg-2)" }}>
+            <div className="spread">
+              <span className="pill info">Level {clue.currentLevel || clue.clueNumber} of {totalLevels}</span>
+              <span className="pill ok">🧭 Current Clue</span>
             </div>
-            <div className="stat">
-              <div className="num">{currentLevel}</div>
-              <div className="lbl">🌊 Current Level</div>
-            </div>
-            <div className="stat">
-              <div className="num" style={{ color: "var(--ok)" }}>
-                {me?.completedCluesCount ?? teamData?.solvedClues?.length ?? 0}
+
+            <div style={{ background: "var(--bg)", padding: 20, borderRadius: 8, marginTop: 16 }}>
+              <p style={{ fontSize: 18, lineHeight: 1.7, margin: "0 0 16px", color: "var(--text)", fontWeight: 500 }}>
+                {clue.clue?.description || clue.description}
+              </p>
+              <div style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }} className="spread">
+                <span className="muted" style={{ fontSize: 13 }}>Scan the matching QR code at the location described to continue.</span>
+                <Link to="/scan" className="btn ok small" style={{ textDecoration: "none" }}>
+                  📷 Open Camera Scanner
+                </Link>
               </div>
-              <div className="lbl">✅ Clues Completed</div>
             </div>
-            <div className="stat">
-              <div className="num" style={{ color: "var(--warn)" }}>
-                {me?.remainingCluesCount ?? Math.max(0, (me?.totalAssignedClues || totalLevels || 0) - (teamData?.solvedClues?.length || 0))}
+
+            {clue.clue?.hints && clue.clue.hints.length > 0 && (
+              <div style={{ marginTop: 16 }}>
+                <p className="muted" style={{ marginBottom: 8 }}>
+                  Stuck? Use a hint (costs points):
+                </p>
+                <div className="row">
+                  {clue.clue.hints.map((h, i) => (
+                    <button key={i} className="btn secondary small" onClick={() => useHint(i + 1)} disabled={busy || isTimeUp}>
+                      Hint {i + 1} (−{h.penalty} points)
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className="lbl">⏳ Clues Remaining</div>
+            )}
+          </div>
+        ) : (
+          <div className="card muted" style={{ marginBottom: 16 }}>No active levels right now. Set sail when the hunt begins.</div>
+        )}
+
+        <div className="stat-grid" style={{ marginTop: 16 }}>
+          <div className="stat">
+            <div className="num" style={{ color: "#f5a623" }}>{teamData?.points ?? 0}</div>
+            <div className="lbl">💰 Points</div>
+          </div>
+          <div className="stat">
+            <div className="num">{currentLevel}</div>
+            <div className="lbl">🌊 Current Level</div>
+          </div>
+          <div className="stat">
+            <div className="num" style={{ color: "var(--ok)" }}>
+              {me?.completedCluesCount ?? teamData?.solvedClues?.length ?? 0}
             </div>
-            <div className="stat">
-              <div className="num">
-                {me?.totalAssignedClues ?? totalLevels ?? 0}
-              </div>
-              <div className="lbl">🎯 Total Assigned Clues</div>
+            <div className="lbl">✅ Clues Completed</div>
+          </div>
+          <div className="stat">
+            <div className="num" style={{ color: "var(--warn)" }}>
+              {me?.remainingCluesCount ?? Math.max(0, (me?.totalAssignedClues || totalLevels || 0) - (teamData?.solvedClues?.length || 0))}
             </div>
-            <div className="stat">
-              <div className="num">#{rank}</div>
-              <div className="lbl">🏆 Points Rank</div>
+            <div className="lbl">⏳ Clues Remaining</div>
+          </div>
+          <div className="stat">
+            <div className="num">
+              {me?.totalAssignedClues ?? totalLevels ?? 0}
             </div>
-            <div className="stat">
-              <div className="num">{teamData?.wrongScans ?? 0}</div>
-              <div className="lbl">⚓ Wrong QR Scans</div>
-            </div>
-            <div className="stat">
-              <div className="num">{fragments.length}</div>
-              <div className="lbl">🧩 Secret Code Fragments</div>
-            </div>
-            <div className="stat">
-              <div className="num">{fmtMs(me?.event?.remainingMs)}</div>
-              <div className="lbl">🧭 Timer</div>
-            </div>
+            <div className="lbl">🎯 Total Assigned Clues</div>
+          </div>
+          <div className="stat">
+            <div className="num">#{rank}</div>
+            <div className="lbl">🏆 Points Rank</div>
+          </div>
+          <div className="stat">
+            <div className="num">{teamData?.wrongScans ?? 0}</div>
+            <div className="lbl">⚓ Wrong QR Scans</div>
+          </div>
+          <div className="stat">
+            <div className="num">{fragments.length}</div>
+            <div className="lbl">🧩 Secret Code Fragments</div>
+          </div>
+          <div className="stat">
+            <div className="num">{fmtMs(me?.event?.remainingMs)}</div>
+            <div className="lbl">🧭 Timer</div>
           </div>
         </div>
 
@@ -444,52 +544,6 @@ export default function Dashboard() {
             </form>
           )}
         </div>
-
-        {isComplete ? (
-          <div className="card" style={{ textAlign: "center", padding: 40 }}>
-            <div style={{ fontSize: 48 }}>🏴‍☠️</div>
-            <h2>TREASURE FOUND!</h2>
-            <p className="muted">
-              Final Points: <strong className="mono">{teamData.finalScore}</strong>
-            </p>
-          </div>
-        ) : clue && (clue.clue || clue.description) ? (
-          <div className="card">
-            <div className="spread">
-              <span className="pill info">Level {clue.currentLevel || clue.clueNumber} of {totalLevels}</span>
-              <span className="pill ok">🧭 Active Riddle</span>
-            </div>
-
-            <div style={{ background: "var(--bg-2)", padding: 20, borderRadius: 8, marginTop: 16 }}>
-              <p style={{ fontSize: 18, lineHeight: 1.7, margin: "0 0 16px", color: "var(--text)", fontWeight: 500 }}>
-                {clue.clue?.description || clue.description}
-              </p>
-              <div style={{ borderTop: "1px solid var(--border)", paddingTop: 12 }} className="spread">
-                <span className="muted" style={{ fontSize: 13 }}>Scan the matching QR code at the location described to continue.</span>
-                <Link to="/scan" className="btn ok small" style={{ textDecoration: "none" }}>
-                  📷 Open Camera Scanner
-                </Link>
-              </div>
-            </div>
-
-            {clue.clue?.hints && clue.clue.hints.length > 0 && (
-              <div style={{ marginTop: 16 }}>
-                <p className="muted" style={{ marginBottom: 8 }}>
-                  Stuck? Use a hint (costs points):
-                </p>
-                <div className="row">
-                  {clue.clue.hints.map((h, i) => (
-                    <button key={i} className="btn secondary small" onClick={() => useHint(i + 1)} disabled={busy || isTimeUp}>
-                      Hint {i + 1} (−{h.penalty} points)
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        ) : (
-          <div className="card muted">No active levels right now. Set sail when the hunt begins.</div>
-        )}
 
         {currentEvent?.rulesAndRegulations && (
           <div className="card" style={{ marginBottom: 16, background: "var(--bg-2)" }}>

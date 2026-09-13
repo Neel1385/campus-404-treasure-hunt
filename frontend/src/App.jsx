@@ -1,7 +1,8 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { Routes, Route, Navigate, useLocation } from "react-router-dom";
 import ErrorBoundary from "./components/ErrorBoundary.jsx";
 import { useAuth } from "./auth.jsx";
+import { api } from "./api.js";
 import { EventProvider, useEvent } from "./EventContext.jsx";
 import Sidebar from "./Sidebar.jsx";
 import Home from "./pages/Home.jsx";
@@ -27,20 +28,54 @@ function RequirePlayer({ children }) {
   return children;
 }
 
+function CheckingHuntStatus() {
+  return (
+    <div className="container narrow">
+      <p className="muted" style={{ textAlign: "center", marginTop: 60 }}>Checking hunt status...</p>
+    </div>
+  );
+}
+
 function RequireLiveEvent({ children }) {
+  const { isLoggedIn, token, logout } = useAuth();
   const { currentEvent, loading } = useEvent();
+  // The gate must use the LOGGED-IN TEAM's own event (from /teams/me), not the
+  // ui-wide selected event (localStorage), which may belong to a different event.
+  const [teamEvent, setTeamEvent] = useState(null);
+  const [resolving, setResolving] = useState(isLoggedIn);
 
-  if (loading) {
-    return (
-      <div className="container narrow">
-        <p className="muted" style={{ textAlign: "center", marginTop: 60 }}>Checking hunt status...</p>
-      </div>
-    );
-  }
+  useEffect(() => {
+    let cancelled = false;
+    if (!isLoggedIn || !token) {
+      setResolving(false);
+      return undefined;
+    }
+    setResolving(true);
+    api
+      .get("/teams/me", { token, eventId: null })
+      .then((d) => {
+        if (!cancelled) setTeamEvent(d.event || null);
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          if (err.status === 401) logout();
+          else setTeamEvent(null); // fall back to ui-wide event below
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setResolving(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isLoggedIn, token, logout]);
 
-  const status = currentEvent?.status || "INACTIVE";
-  const isLive = currentEvent && (status === "RUNNING" || status === "ACTIVE");
-  const isTimeUp = currentEvent && currentEvent.remainingMs != null && currentEvent.remainingMs <= 0;
+  if (loading || resolving) return <CheckingHuntStatus />;
+
+  const base = (isLoggedIn && teamEvent) || currentEvent || null;
+  const status = base?.status || "INACTIVE";
+  const isLive = !!base && (status === "RUNNING" || status === "ACTIVE");
+  const isTimeUp = base?.remainingMs != null && base.remainingMs <= 0;
 
   if (!isLive || isTimeUp) {
     let reason = `⏸️ The event is currently ${status}. Access to game features is disabled.`;
